@@ -1,5 +1,5 @@
-<section class="panel">
-    <h2>{{ $calendar['summary'] }}</h2>
+<section class="content-section activity-calendar stack">
+    <div class="section-heading"><div><p class="eyebrow">Consistency</p><h2>{{ $calendar['summary'] }}</h2></div><span class="count-label">Last 12 months</span></div>
     <div class="heatmap" role="grid" aria-label="Exercise activity calendar from {{ $calendar['from'] }} to {{ $calendar['to'] }}">
         <div class="month-row">
             @foreach($calendar['months'] as $month)
