@@ -1,0 +1,82 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Course;
+use App\Models\Lesson;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+
+class LessonController extends Controller
+{
+    public function index(): View
+    {
+        return view('admin.lessons.index', ['lessons' => Lesson::with('course')->latest()->paginate(20)]);
+    }
+
+    public function create(): View
+    {
+        return view('admin.lessons.form', ['lesson' => new Lesson(), 'courses' => Course::orderBy('title')->get()]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $this->validateLesson($request);
+        $lesson = Lesson::create($data + ['published_at' => $data['publication_status'] === 'PUBLISHED' ? now() : null]);
+        $this->snapshot($lesson);
+
+        return redirect()->route('admin.lessons.index')->with('status', 'Lesson saved.');
+    }
+
+    public function edit(Lesson $lesson): View
+    {
+        return view('admin.lessons.form', ['lesson' => $lesson, 'courses' => Course::orderBy('title')->get()]);
+    }
+
+    public function update(Request $request, Lesson $lesson): RedirectResponse
+    {
+        $data = $this->validateLesson($request, $lesson);
+        $lesson->update($data + [
+            'published_at' => $data['publication_status'] === 'PUBLISHED' ? ($lesson->published_at ?? now()) : null,
+            'archived_at' => $data['publication_status'] === 'ARCHIVED' ? now() : null,
+        ]);
+        $this->snapshot($lesson);
+
+        return redirect()->route('admin.lessons.index')->with('status', 'Lesson updated.');
+    }
+
+    private function validateLesson(Request $request, ?Lesson $lesson = null): array
+    {
+        $data = $request->validate([
+            'course_id' => ['required', 'exists:courses,id'],
+            'title' => ['required', 'string', 'max:255'],
+            'slug' => ['nullable', 'string', 'max:255', Rule::unique('lessons', 'slug')->ignore($lesson)],
+            'summary' => ['required', 'string', 'max:255'],
+            'body_markdown' => ['required', 'string'],
+            'code_example' => ['nullable', 'string'],
+            'sort_order' => ['required', 'integer', 'min:1'],
+            'publication_status' => ['required', Rule::in(['DRAFT', 'PUBLISHED', 'ARCHIVED'])],
+        ]);
+
+        $data['slug'] = $data['slug'] ?: Str::slug($data['title']);
+
+        return $data;
+    }
+
+    private function snapshot(Lesson $lesson): void
+    {
+        $lesson->versions()->create([
+            'version_number' => $lesson->versions()->max('version_number') + 1,
+            'title' => $lesson->title,
+            'summary' => $lesson->summary,
+            'body_markdown' => $lesson->body_markdown,
+            'code_example' => $lesson->code_example,
+            'status' => $lesson->publication_status,
+            'published_at' => $lesson->published_at,
+        ]);
+    }
+}
