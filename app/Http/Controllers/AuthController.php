@@ -23,7 +23,23 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'confirmed', Password::min(8)],
+            'password' => [
+                'required',
+                'confirmed',
+                Password::min(8),
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $password = (string) $value;
+                    $variety = (int) preg_match('/[a-z]/', $password)
+                        + (int) preg_match('/[A-Z]/', $password)
+                        + (int) preg_match('/\d/', $password)
+                        + (int) preg_match('/[^A-Za-z0-9]/', $password);
+                    $lengthScore = strlen($password) >= 12 ? 2 : (strlen($password) >= 8 ? 1 : 0);
+
+                    if (strlen($password) < 8 || $lengthScore + $variety < 4) {
+                        $fail('The password is too weak. Use at least 8 characters with a mix of uppercase, lowercase, numbers, and symbols.');
+                    }
+                },
+            ],
             'timezone' => ['required', Rule::in($this->timezones())],
         ]);
 

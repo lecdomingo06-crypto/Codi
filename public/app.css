@@ -388,6 +388,51 @@ textarea {
     width: 100%;
 }
 
+.password-strength {
+    background: #e5e7eb;
+    border-radius: 999px;
+    height: 28px;
+    overflow: hidden;
+    width: 100%;
+}
+
+.password-strength__bar {
+    align-items: center;
+    background: transparent;
+    border-radius: inherit;
+    color: #ffffff;
+    display: flex;
+    font-size: .85rem;
+    font-weight: 900;
+    height: 100%;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+    transition: width .28s ease, background-color .28s ease;
+    white-space: nowrap;
+    width: 0;
+}
+
+.password-strength__bar.is-weak {
+    background: #dc2626;
+}
+
+.password-strength__bar.is-medium {
+    background: #f59e0b;
+}
+
+.password-strength__bar.is-strong {
+    background: #16a34a;
+}
+
+.field-message {
+    color: var(--danger);
+    font-size: .9rem;
+    font-weight: 800;
+    margin: -10px 0 0;
+    min-height: 1.35em;
+}
+
 input:focus,
 select:focus,
 textarea:focus,
