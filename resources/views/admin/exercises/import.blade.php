@@ -1,9 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
-    <section class="stack">
-        <p class="eyebrow">Admin</p>
-        <h1>Import exercises</h1>
+    <section class="stack admin-page">
+        <header class="page-heading"><div><p class="eyebrow">Admin · challenge library</p><h1>Import exercises</h1><p>Paste a valid JSON payload to create draft challenges in bulk.</p></div></header>
         <form method="POST" action="{{ route('admin.exercises.import') }}" class="panel stack">
             @csrf
             <label>JSON payload
