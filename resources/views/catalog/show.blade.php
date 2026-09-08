@@ -1,29 +1,29 @@
 @extends('layouts.app')
 
 @section('content')
-    <section class="stack">
-        <p class="eyebrow">Course</p>
-        <h1>{{ $course->title }}</h1>
-        <p class="lead">{{ $course->summary }}</p>
-        <form method="POST" action="{{ route('courses.enroll', $course) }}" class="actions">
+    <section class="stack course-page">
+        <header class="page-heading course-heading">
+            <div><p class="eyebrow">Learning path</p><h1>{{ $course->title }}</h1><p>{{ $course->summary }}</p></div>
+            <form method="POST" action="{{ route('courses.enroll', $course) }}" class="actions">
             @csrf
-            <button type="submit">Enroll</button>
-        </form>
+            <button type="submit">Enroll in course <span aria-hidden="true">→</span></button>
+            </form>
+        </header>
 
         <div class="grid-two">
             <section class="panel stack">
-                <h2>Lessons</h2>
+                <div class="section-heading"><h2>Lessons</h2><span class="count-label">{{ $course->lessons->count() }}</span></div>
                 @forelse($course->lessons as $lesson)
-                    <p><a href="{{ route('lessons.show', $lesson) }}">{{ $lesson->title }}</a><br><span class="muted">{{ $lesson->summary }}</span></p>
+                    <a class="list-item" href="{{ route('lessons.show', $lesson) }}"><span class="list-item__icon" aria-hidden="true">▤</span><span><strong>{{ $lesson->title }}</strong><small>{{ $lesson->summary }}</small></span><span aria-hidden="true">→</span></a>
                 @empty
                     <p>No published lessons yet.</p>
                 @endforelse
             </section>
 
             <section class="panel stack">
-                <h2>Exercises</h2>
+                <div class="section-heading"><h2>Exercises</h2><span class="count-label">{{ $course->exercises->count() }}</span></div>
                 @forelse($course->exercises as $exercise)
-                    <p><a href="{{ route('exercises.show', $exercise) }}">{{ $exercise->title }}</a> <span class="badge">{{ $exercise->difficulty }}</span><br><span class="muted">{{ $exercise->summary }}</span></p>
+                    <a class="list-item" href="{{ route('exercises.show', $exercise) }}"><span><strong>{{ $exercise->title }}</strong><small>{{ $exercise->summary }}</small></span><x-difficulty-badge :difficulty="$exercise->difficulty" /></a>
                 @empty
                     <p>No published exercises yet.</p>
                 @endforelse

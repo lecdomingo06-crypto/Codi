@@ -1,9 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
-    <section class="stack">
-        <p class="eyebrow">Admin</p>
-        <h1>Exercises</h1>
+    <section class="stack admin-page">
+        <header class="page-heading"><div><p class="eyebrow">Admin · challenge library</p><h1>Exercises</h1><p>Create, review, and publish coding challenges.</p></div></header>
         <p class="actions">
             <a class="button" href="{{ route('admin.exercises.create') }}">New exercise</a>
             <a class="button secondary" href="{{ route('admin.exercises.import.form') }}">Import JSON</a>
@@ -11,8 +10,8 @@
         <div class="catalog-grid">
             @foreach($exercises as $exercise)
             <article class="panel stack">
-                <h2>{{ $exercise->title }} <span class="badge">{{ $exercise->difficulty }}</span></h2>
-                <p>{{ $exercise->publication_status }}</p>
+                <h2>{{ $exercise->title }} <x-difficulty-badge :difficulty="$exercise->difficulty" /></h2>
+                <p><span class="badge">{{ ucfirst(strtolower($exercise->publication_status)) }}</span></p>
                 <p>{{ $exercise->summary }}</p>
                 <p>Concepts: {{ $exercise->concepts->pluck('name')->join(', ') }}</p>
                 <p class="actions">

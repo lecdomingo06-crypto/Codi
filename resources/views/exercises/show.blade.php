@@ -4,25 +4,28 @@
     <section class="leetcode-workspace">
         <div class="workspace-topbar">
             <div>
-                <p class="eyebrow">Challenge workspace</p>
-                <h1>{{ $version->title }} <span class="badge">{{ $version->difficulty }}</span></h1>
+                <p class="workspace-breadcrumb"><a href="{{ route('catalog.index') }}">Problems</a><span aria-hidden="true">/</span>Challenge workspace</p>
+                <h1>{{ $version->title }} <x-difficulty-badge :difficulty="$version->difficulty" /></h1>
             </div>
             <div class="workspace-actions">
-                <a href="{{ route('catalog.index') }}">Problem list</a>
+                <span class="workspace-limit">{{ $version->time_limit_ms }} ms <span aria-hidden="true">·</span> {{ $version->memory_limit_mb }} MB</span>
+                <a class="button button--secondary button--small" href="{{ route('catalog.index') }}">Problem list</a>
             </div>
         </div>
 
         <div class="workspace-grid">
             <aside class="problem-panel">
-                <div class="workspace-tabs" aria-label="Exercise sections">
-                    <span class="active">Description</span>
-                    <span>Hints</span>
-                    <span>Submissions</span>
+                <div class="workspace-tabs" role="tablist" aria-label="Exercise sections">
+                    <button class="active" type="button" role="tab" aria-selected="true" aria-controls="description-panel" id="description-tab" data-workspace-tab="description-panel">Description</button>
+                    <button type="button" role="tab" aria-selected="false" aria-controls="hints-panel" id="hints-tab" data-workspace-tab="hints-panel">Hints</button>
+                    <button type="button" role="tab" aria-selected="false" aria-controls="submissions-panel" id="submissions-tab" data-workspace-tab="submissions-panel">Submissions <span class="tab-count">{{ $submissions->count() }}</span></button>
                 </div>
 
-                <div class="problem-scroll stack">
+                <div class="problem-scroll stack workspace-tab-panel" id="description-panel" role="tabpanel" aria-labelledby="description-tab">
                     <p class="lead">{{ $version->summary }}</p>
-                    <p>Concepts: {{ $exercise->concepts->pluck('name')->join(', ') }}</p>
+                    @if($exercise->concepts->isNotEmpty())
+                        <p class="topic-pills"><span>Topics</span>@foreach($exercise->concepts as $concept)<span class="topic-pill">{{ $concept->name }}</span>@endforeach</p>
+                    @endif
                     <div>{!! nl2br(e($version->description_markdown)) !!}</div>
 
                     @if($version->constraints)
@@ -34,31 +37,45 @@
                         </ul>
                     @endif
 
-                    <h2>Visible Tests</h2>
+                    <h2>Examples</h2>
                     @foreach($visibleTests as $test)
-                        <div class="case-card">
-                            <strong>{{ $test->name }}</strong>
-                            <span>Expected: {{ $test->expected_output }}</span>
+                        <div class="case-card stack">
+                            <strong>Example {{ $loop->iteration }}{{ $test->name ? ': '.$test->name : '' }}</strong>
+                            @if($test->input)<span><b>Input</b>{{ $test->input }}</span>@endif
+                            <span><b>Output</b>{{ $test->expected_output }}</span>
                         </div>
                     @endforeach
+                </div>
 
+                <div class="problem-scroll stack workspace-tab-panel" id="hints-panel" role="tabpanel" aria-labelledby="hints-tab" hidden>
+                    <div><p class="eyebrow">Need a nudge?</p><h2>Hints</h2><p class="workspace-help">Hints reveal the next useful idea without giving away the complete solution.</p></div>
                     @if($version->hints)
-                        <h2>Hints</h2>
                         @foreach($version->hints as $hint)
                             <details>
                                 <summary>Hint {{ $hint['order'] }}</summary>
                                 <p>{{ $hint['content_markdown'] }}</p>
                             </details>
                         @endforeach
+                    @else
+                        <div class="empty-state"><span aria-hidden="true">⌁</span><p>No hints have been added for this problem.</p></div>
                     @endif
+                </div>
+
+                <div class="problem-scroll stack workspace-tab-panel" id="submissions-panel" role="tabpanel" aria-labelledby="submissions-tab" hidden>
+                    <div><p class="eyebrow">Your attempts</p><h2>Previous submissions</h2></div>
+                    @forelse($submissions as $submission)
+                        <a class="workspace-submission" href="{{ route('submissions.show', $submission) }}"><span><x-verdict-badge :verdict="$submission->verdict" /><small>{{ $submission->submitted_at->format('M j, Y · H:i') }}</small></span><span class="code-meta">{{ $submission->language }} · {{ $submission->execution_time_ms ?? '—' }}ms</span></a>
+                    @empty
+                        <div class="empty-state"><span aria-hidden="true">⌘</span><p>Submit a solution to start building your history.</p></div>
+                    @endforelse
                 </div>
             </aside>
 
             <section class="editor-panel">
                 <div class="editor-toolbar">
-                    <strong>&lt;/&gt; Code</strong>
+                    <strong>&lt;/&gt; Editor</strong>
                     <label>Language
-                        <select name="language" form="run-form" data-editor-language>
+                        <select name="language" form="run-form" data-editor-language aria-label="Programming language">
                             @foreach($version->supported_languages as $language)
                                 <option value="{{ $language }}" @selected(old('language', $version->supported_languages[0] ?? 'python') === $language)>{{ $language }}</option>
                             @endforeach
@@ -85,43 +102,35 @@
                 </form>
 
                 <div class="result-dock">
-                    <div class="result-tabs">
-                        <strong>Testcase</strong>
-                        <strong>Test Result</strong>
+                    <div class="result-tabs" role="tablist" aria-label="Test panel">
+                        <button class="active" type="button" role="tab" aria-selected="true" data-result-tab="result-output">Test result</button>
+                        <button type="button" role="tab" aria-selected="false" data-result-tab="testcase-output">Testcase</button>
                         <span data-auto-check-status>Auto-check waits for your edits.</span>
                     </div>
-                    <div class="result-list" data-auto-check-results>
+                    <div id="result-output" class="result-list" role="tabpanel" data-auto-check-results>
                         @if($lastRun)
-                            <h2>Last run: {{ $lastRun->verdict }}</h2>
+                            <div class="verdict {{ $lastRun->verdict === 'ACCEPTED' ? 'accepted' : 'failed' }}">{{ str_replace('_', ' ', $lastRun->verdict) }}</div>
                             @foreach($lastRun->testResults as $result)
-                                <p>{{ $result->test_name }} &middot; {{ $result->verdict }} &middot; {{ $result->message }}</p>
+                                <div class="result-row {{ $result->verdict === 'ACCEPTED' ? 'accepted' : 'failed' }}"><strong>{{ $result->test_name }}</strong><span>{{ $result->verdict }}</span><small>{{ $result->message }}</small></div>
                             @endforeach
                         @else
-                            <p>Visible test feedback will appear here as you type.</p>
+                            <div class="result-placeholder"><span aria-hidden="true">▷</span><p>Run your code to see visible test results here.</p></div>
                         @endif
                     </div>
+                    <div id="testcase-output" class="result-list testcase-list" role="tabpanel" hidden><p>Visible examples are used when you run your code.</p>@forelse($visibleTests as $test)<div class="testcase-row"><strong>{{ $test->name ?: 'Example '.$loop->iteration }}</strong><code>{{ $test->input }}</code></div>@empty<p>No visible test cases are available.</p>@endforelse</div>
                 </div>
 
                 <div class="editor-actions">
-                    <button type="button" data-run-button>Run</button>
+                    <button type="button" class="button--secondary" data-run-button>Run code</button>
                     <form method="POST" action="{{ route('exercises.submit', $exercise) }}" data-submit-from-editor>
                         @csrf
                         <input type="hidden" name="idempotency_key" value="{{ $idempotencyKey }}">
                         <input type="hidden" name="language" value="{{ $version->supported_languages[0] ?? 'python' }}" data-submit-language>
                         <input type="hidden" name="source_code" value="{{ old('source_code', $starterCode) }}" data-submit-code>
-                        <button type="submit">Submit</button>
+                        <button type="submit">Submit solution</button>
                     </form>
                 </div>
             </section>
         </div>
-
-        <section class="panel stack workspace-history">
-            <h2>Previous submissions</h2>
-            @forelse($submissions as $submission)
-                <p><a href="{{ route('submissions.show', $submission) }}">{{ $submission->submitted_at->format('Y-m-d H:i') }}</a> &middot; {{ $submission->verdict }}</p>
-            @empty
-                <p>No submissions yet.</p>
-            @endforelse
-        </section>
     </section>
 @endsection
