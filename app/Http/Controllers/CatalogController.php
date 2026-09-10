@@ -8,10 +8,50 @@ use App\Models\Exercise;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class CatalogController extends Controller
 {
+    public function courses(): View
+    {
+        $courses = Course::query()
+            ->where('publication_status', 'PUBLISHED')
+            ->withCount([
+                'lessons as published_lessons_count' => fn ($query) => $query->where('publication_status', 'PUBLISHED'),
+            ])
+            ->orderBy('title')
+            ->get();
+
+        $completedByCourse = DB::table('lesson_progress')
+            ->join('lessons', 'lessons.id', '=', 'lesson_progress.lesson_id')
+            ->where('lesson_progress.user_id', request()->user()->id)
+            ->where('lesson_progress.status', 'COMPLETED')
+            ->where('lessons.publication_status', 'PUBLISHED')
+            ->groupBy('lessons.course_id')
+            ->pluck(DB::raw('count(*)'), 'lessons.course_id');
+
+        $courses->each(function (Course $course) use ($completedByCourse): void {
+            $course->completed_lessons_count = (int) ($completedByCourse[$course->id] ?? 0);
+            $course->progress_percent = $course->published_lessons_count > 0
+                ? (int) round(($course->completed_lessons_count / $course->published_lessons_count) * 100)
+                : 0;
+        });
+
+        $categoryDescriptions = [
+            'Data Structures & Algorithms' => 'Build the core problem-solving patterns used in technical interviews and real software.',
+            'System Design' => 'Learn how to reason about reliable, scalable services from first principles.',
+            'Python' => 'Practice expressive Python with short lessons and focused exercises.',
+            'Web Development' => 'Create useful web experiences by understanding the browser, server, and everything between.',
+            'Programming' => 'Develop the fundamentals that make every new language easier to learn.',
+        ];
+
+        return view('courses.index', [
+            'courses' => $courses,
+            'categoryDescriptions' => $categoryDescriptions,
+        ]);
+    }
+
     public function index(Request $request): View|JsonResponse
     {
         $difficulty = $request->query('difficulty');
@@ -53,15 +93,33 @@ class CatalogController extends Controller
 
         $course->load([
             'lessons' => fn ($query) => $query->where('publication_status', 'PUBLISHED'),
+            'modules.lessons' => fn ($query) => $query->where('publication_status', 'PUBLISHED'),
             'exercises' => fn ($query) => $query->where('publication_status', 'PUBLISHED')->with('concepts'),
         ]);
 
-        return view('catalog.show', ['course' => $course]);
+        $completedLessons = DB::table('lesson_progress')
+            ->where('user_id', request()->user()->id)
+            ->whereIn('lesson_id', $course->lessons->pluck('id'))
+            ->where('status', 'COMPLETED')
+            ->count();
+
+        $course->completed_lessons_count = $completedLessons;
+        $course->published_lessons_count = $course->lessons->count();
+        $course->progress_percent = $course->published_lessons_count > 0
+            ? (int) round(($completedLessons / $course->published_lessons_count) * 100)
+            : 0;
+
+        return view('catalog.show', [
+            'course' => $course,
+            'isAdmin' => request()->user()->isAdmin(),
+            'isEnrolled' => request()->user()->enrollments()->where('course_id', $course->id)->exists(),
+        ]);
     }
 
     public function enroll(Request $request, Course $course): RedirectResponse
     {
         abort_unless($course->publication_status === 'PUBLISHED', 404);
+        abort_unless($request->user()->isUser(), 403);
 
         Enrollment::firstOrCreate(
             ['user_id' => $request->user()->id, 'course_id' => $course->id],

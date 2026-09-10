@@ -20,10 +20,14 @@ use Illuminate\View\View;
 
 class ExerciseController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         return view('admin.exercises.index', [
-            'exercises' => Exercise::with('activeVersion', 'concepts')->latest()->paginate(20),
+            'exercises' => Exercise::with('activeVersion', 'concepts')
+                ->when($request->integer('course_id'), fn ($query, $courseId) => $query->where('course_id', $courseId))
+                ->latest()
+                ->paginate(20)
+                ->withQueryString(),
         ]);
     }
 

@@ -26,6 +26,11 @@ class Lesson extends Model
         return $this->belongsTo(Course::class);
     }
 
+    public function module()
+    {
+        return $this->belongsTo(Module::class);
+    }
+
     public function versions()
     {
         return $this->hasMany(LessonVersion::class);

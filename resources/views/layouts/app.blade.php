@@ -27,7 +27,8 @@
         <nav id="primary-nav" class="primary-nav" aria-label="Primary navigation">
             @auth
                 <a class="{{ request()->routeIs('dashboard') ? 'is-active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
-                <a class="{{ request()->routeIs('catalog.*', 'courses.*', 'lessons.*', 'exercises.*') ? 'is-active' : '' }}" href="{{ route('catalog.index') }}">Problems</a>
+                <a class="{{ request()->routeIs('catalog.*', 'lessons.*', 'exercises.*') ? 'is-active' : '' }}" href="{{ route('catalog.index') }}">Problems</a>
+                <a class="{{ request()->routeIs('courses.*') ? 'is-active' : '' }}" href="{{ route('courses.index') }}">Courses</a>
                 <a class="{{ request()->routeIs('progress.*', 'submissions.*') ? 'is-active' : '' }}" href="{{ route('progress.show') }}">Progress</a>
                 @if(auth()->user()->isAdmin())
                     <a class="{{ request()->routeIs('admin.*') ? 'is-active' : '' }}" href="{{ route('admin.dashboard') }}">Admin</a>

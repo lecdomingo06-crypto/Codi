@@ -16,6 +16,14 @@
                     @endforeach
                 </select>
             </label>
+            <label>Module
+                <select name="module_id">
+                    <option value="">No module</option>
+                    @foreach($modules as $module)
+                        <option value="{{ $module->id }}" @selected((string) old('module_id', $lesson->module_id) === (string) $module->id)>{{ $module->course->title }} · {{ $module->title }}</option>
+                    @endforeach
+                </select>
+            </label>
             <label>Title <input name="title" value="{{ old('title', $lesson->title) }}" required></label>
             <label>Slug <input name="slug" value="{{ old('slug', $lesson->slug) }}"></label>
             <label>Summary <input name="summary" value="{{ old('summary', $lesson->summary) }}" required></label>

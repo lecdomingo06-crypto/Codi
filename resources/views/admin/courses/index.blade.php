@@ -7,10 +7,12 @@
         <div class="catalog-grid">
             @foreach($courses as $course)
             <article class="panel stack">
-                <h2>{{ $course->title }}</h2>
+                <h2><a href="{{ route('courses.show', $course) }}">{{ $course->title }}</a></h2>
                 <p><span class="badge">{{ ucfirst(strtolower($course->publication_status)) }}</span></p>
                 <p>{{ $course->summary }}</p>
-                <p><a href="{{ route('admin.courses.edit', $course) }}">Edit</a></p>
+                <p class="actions">
+                    <a href="{{ route('admin.courses.edit', $course) }}">Edit</a>
+                </p>
             </article>
             @endforeach
         </div>

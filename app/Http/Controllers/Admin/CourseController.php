@@ -73,6 +73,9 @@ class CourseController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255', Rule::unique('courses', 'slug')->ignore($course)],
             'summary' => ['required', 'string', 'max:255'],
+            'category' => ['required', 'string', 'max:120'],
+            'duration_minutes' => ['nullable', 'integer', 'min:1', 'max:10000'],
+            'difficulty' => ['required', Rule::in(['EASY', 'MEDIUM', 'HARD'])],
             'description_markdown' => ['nullable', 'string'],
             'publication_status' => ['required', Rule::in(['DRAFT', 'PUBLISHED', 'ARCHIVED'])],
         ]);

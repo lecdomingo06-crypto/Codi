@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Lesson;
+use App\Models\Module;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -13,14 +14,24 @@ use Illuminate\View\View;
 
 class LessonController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        return view('admin.lessons.index', ['lessons' => Lesson::with('course')->latest()->paginate(20)]);
+        return view('admin.lessons.index', [
+            'lessons' => Lesson::with('course')
+                ->when($request->integer('course_id'), fn ($query, $courseId) => $query->where('course_id', $courseId))
+                ->latest()
+                ->paginate(20)
+                ->withQueryString(),
+        ]);
     }
 
     public function create(): View
     {
-        return view('admin.lessons.form', ['lesson' => new Lesson(), 'courses' => Course::orderBy('title')->get()]);
+        return view('admin.lessons.form', [
+            'lesson' => new Lesson(),
+            'courses' => Course::orderBy('title')->get(),
+            'modules' => Module::with('course')->orderBy('title')->get(),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -34,7 +45,11 @@ class LessonController extends Controller
 
     public function edit(Lesson $lesson): View
     {
-        return view('admin.lessons.form', ['lesson' => $lesson, 'courses' => Course::orderBy('title')->get()]);
+        return view('admin.lessons.form', [
+            'lesson' => $lesson,
+            'courses' => Course::orderBy('title')->get(),
+            'modules' => Module::with('course')->orderBy('title')->get(),
+        ]);
     }
 
     public function update(Request $request, Lesson $lesson): RedirectResponse
@@ -53,6 +68,10 @@ class LessonController extends Controller
     {
         $data = $request->validate([
             'course_id' => ['required', 'exists:courses,id'],
+            'module_id' => [
+                'nullable',
+                Rule::exists('modules', 'id')->where(fn ($query) => $query->where('course_id', $request->input('course_id'))),
+            ],
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255', Rule::unique('lessons', 'slug')->ignore($lesson)],
             'summary' => ['required', 'string', 'max:255'],
