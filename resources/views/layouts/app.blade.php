@@ -15,7 +15,7 @@
 <body data-theme="dark">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="topbar">
-        <a class="brand" href="{{ auth()->check() ? route('dashboard') : route('home') }}" aria-label="Coddy home">
+        <a class="brand" href="{{ auth()->check() ? route('community.index') : route('home') }}" aria-label="Coddy home">
             <span class="brand-mark" aria-hidden="true">&lt;/&gt;</span>
             <span class="brand-name">Coddy</span>
         </a>
@@ -26,16 +26,22 @@
 
         <nav id="primary-nav" class="primary-nav" aria-label="Primary navigation">
             @auth
-                <a class="{{ request()->routeIs('dashboard') ? 'is-active' : '' }}" href="{{ route('dashboard') }}">Dashboard</a>
-                <a class="{{ request()->routeIs('catalog.*', 'courses.*', 'lessons.*', 'exercises.*') ? 'is-active' : '' }}" href="{{ route('catalog.index') }}">Problems</a>
+                @php
+                    $searchesCourses = request()->routeIs('courses.*', 'lessons.*');
+                    $searchAction = $searchesCourses ? route('courses.index') : route('catalog.index');
+                    $searchLabel = $searchesCourses ? 'Search courses or lessons' : 'Search problems';
+                @endphp
+                <a class="{{ request()->routeIs('community.*') ? 'is-active' : '' }}" href="{{ route('community.index') }}">Community</a>
+                <a class="{{ request()->routeIs('courses.*', 'lessons.*') ? 'is-active' : '' }}" href="{{ route('courses.index') }}">Courses</a>
+                <a class="{{ request()->routeIs('catalog.*', 'exercises.*') ? 'is-active' : '' }}" href="{{ route('catalog.index') }}">Problems</a>
                 <a class="{{ request()->routeIs('progress.*', 'submissions.*') ? 'is-active' : '' }}" href="{{ route('progress.show') }}">Progress</a>
                 @if(auth()->user()->isAdmin())
                     <a class="{{ request()->routeIs('admin.*') ? 'is-active' : '' }}" href="{{ route('admin.dashboard') }}">Admin</a>
                 @endif
-                <form class="nav-search" method="GET" action="{{ route('catalog.index') }}" role="search">
-                    <label class="sr-only" for="nav-search">Search problems</label>
+                <form class="nav-search" method="GET" action="{{ $searchAction }}" role="search">
+                    <label class="sr-only" for="nav-search">{{ $searchLabel }}</label>
                     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
-                    <input id="nav-search" name="search" type="search" placeholder="Search problems">
+                    <input id="nav-search" name="search" type="search" value="{{ request('search') }}" placeholder="{{ $searchLabel }}">
                 </form>
                 <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Switch to light theme" title="Switch theme">
                     <svg class="theme-icon-moon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20.7 15.1A8.5 8.5 0 0 1 8.9 3.3 8.5 8.5 0 1 0 20.7 15.1Z"/></svg>
@@ -43,7 +49,13 @@
                 </button>
                 <details class="account-menu">
                     <summary aria-label="Open account menu">
-                        <span class="avatar" aria-hidden="true">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
+                        <span class="avatar" aria-hidden="true">
+                            @if(auth()->user()->avatarUrl())
+                                <img src="{{ auth()->user()->avatarUrl() }}" alt="">
+                            @else
+                                {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                            @endif
+                        </span>
                         <span class="account-name">{{ auth()->user()->name }}</span>
                         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg>
                     </summary>

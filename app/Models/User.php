@@ -26,6 +26,7 @@ class User extends Authenticatable
         'status',
         'timezone',
         'points',
+        'avatar_path',
     ];
 
     /**
@@ -80,5 +81,25 @@ class User extends Authenticatable
     public function submissions()
     {
         return $this->hasMany(Submission::class);
+    }
+
+    public function communityPosts()
+    {
+        return $this->hasMany(CommunityPost::class);
+    }
+
+    public function communityComments()
+    {
+        return $this->hasMany(CommunityComment::class);
+    }
+
+    public function communityVotes()
+    {
+        return $this->hasMany(CommunityVote::class);
+    }
+
+    public function avatarUrl(): ?string
+    {
+        return $this->avatar_path ? asset('storage/'.$this->avatar_path) : null;
     }
 }

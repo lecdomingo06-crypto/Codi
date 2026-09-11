@@ -5,6 +5,7 @@
         <header class="page-heading"><div><p class="eyebrow">Content operations</p><h1>Admin dashboard</h1><p>Manage the learning library and keep an eye on platform activity.</p></div></header>
         <p class="actions">
             <a class="button" href="{{ route('admin.courses.index') }}">Courses</a>
+            <a class="button" href="{{ route('admin.modules.index') }}">Modules</a>
             <a class="button" href="{{ route('admin.lessons.index') }}">Lessons</a>
             <a class="button" href="{{ route('admin.exercises.index') }}">Exercises</a>
             <a class="button secondary" href="{{ route('admin.exercises.import.form') }}">Import exercises</a>

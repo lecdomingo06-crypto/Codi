@@ -29,6 +29,8 @@ class JudgeService
         return match ($language) {
             'python' => $this->runPython($version, $sourceCode, $testCases),
             'javascript', 'typescript' => $this->runJavaScript($version, $language, $sourceCode, $testCases),
+            'php' => $this->runPhp($version, $sourceCode, $testCases),
+            'cpp' => $this->runCpp($version, $sourceCode, $testCases),
             default => $this->result('INTERNAL_ERROR', $testCases, 'Unsupported language.'),
         };
     }
@@ -39,7 +41,7 @@ class JudgeService
      */
     private function runPython(ExerciseVersion $version, string $sourceCode, Collection $testCases): array
     {
-        $functionName = $this->functionName($version, 'python');
+        $functionName = $this->functionName($version, 'python', $sourceCode);
         $workspace = $this->workspace();
 
         try {
@@ -70,7 +72,7 @@ class JudgeService
      */
     private function runJavaScript(ExerciseVersion $version, string $language, string $sourceCode, Collection $testCases): array
     {
-        $functionName = $this->functionName($version, $language);
+        $functionName = $this->functionName($version, $language, $sourceCode);
         $workspace = $this->workspace();
 
         try {
@@ -90,6 +92,87 @@ class JudgeService
                 ]),
                 $testCases,
             );
+        } finally {
+            File::deleteDirectory($workspace);
+        }
+    }
+
+    /**
+     * @param  Collection<int, \App\Models\TestCase>  $testCases
+     * @return array{verdict:string, execution_time_ms:int, memory_kb:int, output:string, tests:array<int, array<string, mixed>>}
+     */
+    private function runPhp(ExerciseVersion $version, string $sourceCode, Collection $testCases): array
+    {
+        $functionName = $this->functionName($version, 'php', $sourceCode);
+        $workspace = $this->workspace();
+
+        try {
+            $solutionPath = $workspace.DIRECTORY_SEPARATOR.'solution.php';
+            $runnerPath = $workspace.DIRECTORY_SEPARATOR.'runner.php';
+            $normalizedSource = str_starts_with(ltrim($sourceCode), '<?php')
+                ? $sourceCode
+                : "<?php\n".$sourceCode;
+
+            File::put($solutionPath, $normalizedSource);
+            File::put($runnerPath, $this->phpHarness());
+
+            return $this->runProcess(
+                $this->process([
+                    config('judge.php_binary'),
+                    $runnerPath,
+                    $solutionPath,
+                    $functionName,
+                    json_encode($this->testPayload($testCases), JSON_THROW_ON_ERROR),
+                ]),
+                $testCases,
+            );
+        } finally {
+            File::deleteDirectory($workspace);
+        }
+    }
+
+    /**
+     * @param  Collection<int, \App\Models\TestCase>  $testCases
+     * @return array{verdict:string, execution_time_ms:int, memory_kb:int, output:string, tests:array<int, array<string, mixed>>}
+     */
+    private function runCpp(ExerciseVersion $version, string $sourceCode, Collection $testCases): array
+    {
+        $functionName = $this->functionName($version, 'cpp', $sourceCode);
+        $workspace = $this->workspace();
+
+        try {
+            $sourcePath = $workspace.DIRECTORY_SEPARATOR.'solution.cpp';
+            $binaryPath = $workspace.DIRECTORY_SEPARATOR.(PHP_OS_FAMILY === 'Windows' ? 'solution.exe' : 'solution');
+
+            File::put($sourcePath, $this->cppHarness($sourceCode, $functionName, $testCases));
+
+            $compile = $this->process([
+                config('judge.cpp_binary'),
+                $sourcePath,
+                '-std=c++17',
+                '-O0',
+                '-o',
+                $binaryPath,
+            ]);
+            $compile->setTimeout((float) config('judge.timeout_seconds'));
+
+            try {
+                $compile->run();
+            } catch (ProcessTimedOutException) {
+                return $this->result('TIME_LIMIT_EXCEEDED', $testCases, 'C++ compilation timed out.');
+            } catch (Throwable $exception) {
+                return $this->result('INTERNAL_ERROR', $testCases, $exception->getMessage());
+            }
+
+            if (! $compile->isSuccessful()) {
+                $message = trim($compile->getErrorOutput()) ?: trim($compile->getOutput()) ?: 'C++ compilation failed.';
+
+                return $this->result('COMPILE_ERROR', $testCases, Str::limit($message, 700));
+            }
+
+            return $this->runProcess($this->process([$binaryPath]), $testCases);
+        } catch (\InvalidArgumentException $exception) {
+            return $this->result('INTERNAL_ERROR', $testCases, $exception->getMessage());
         } finally {
             File::deleteDirectory($workspace);
         }
@@ -241,7 +324,7 @@ class JudgeService
         ];
     }
 
-    private function functionName(ExerciseVersion $version, string $language): string
+    private function functionName(ExerciseVersion $version, string $language, ?string $sourceCode = null): string
     {
         $signature = $version->function_signature_by_language[$language] ?? '';
 
@@ -249,8 +332,18 @@ class JudgeService
             return $matches[1];
         }
 
-        if (preg_match('/(?:def|function)\s+([A-Za-z_][A-Za-z0-9_]*)/', $version->starterCodeFor($language), $matches)) {
+        if ($language === 'cpp' && preg_match('/\b(?:auto|bool|char|double|float|int|long|short|size_t|string|std::string|vector<[^>]+>|std::vector<[^>]+>)\s+[*&\s]*([A-Za-z_][A-Za-z0-9_]*)\s*\(/', $signature, $matches)) {
             return $matches[1];
+        }
+
+        foreach (array_filter([$sourceCode, $version->starterCodeFor($language)]) as $candidateCode) {
+            if (preg_match('/(?:def|function)\s+([A-Za-z_][A-Za-z0-9_]*)/', $candidateCode, $matches)) {
+                return $matches[1];
+            }
+
+            if ($language === 'cpp' && preg_match('/\b(?:auto|bool|char|double|float|int|long|short|size_t|string|std::string|vector<[^>]+>|std::vector<[^>]+>)\s+[*&\s]*([A-Za-z_][A-Za-z0-9_]*)\s*\(/', $candidateCode, $matches)) {
+                return $matches[1];
+            }
         }
 
         return 'solution';
@@ -451,5 +544,336 @@ for (const test of tests) {
 
 process.stdout.write(JSON.stringify({ status: 'OK', tests: results }));
 JS;
+    }
+
+    private function phpHarness(): string
+    {
+        return <<<'PHP'
+<?php
+
+$sourcePath = $argv[1];
+$functionName = $argv[2];
+$tests = json_decode($argv[3], true) ?: [];
+
+function emit_result(string $status, string $message, array $tests = []): void
+{
+    echo json_encode(['status' => $status, 'message' => $message, 'tests' => $tests]);
+    exit(0);
+}
+
+function parse_value($value)
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+
+    $decoded = json_decode($value, true);
+
+    return json_last_error() === JSON_ERROR_NONE ? $decoded : $value;
+}
+
+function normalize_value($value): string
+{
+    if (is_string($value)) {
+        return trim($value);
+    }
+
+    return json_encode($value, JSON_UNESCAPED_SLASHES);
+}
+
+try {
+    ob_start();
+    require $sourcePath;
+    ob_end_clean();
+} catch (ParseError $exception) {
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    emit_result('COMPILE_ERROR', $exception->getMessage());
+} catch (Throwable $exception) {
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    emit_result('RUNTIME_ERROR', $exception->getMessage());
+}
+
+if (! function_exists($functionName)) {
+    emit_result('COMPILE_ERROR', "Function '{$functionName}' was not defined.");
+}
+
+$results = [];
+
+foreach ($tests as $test) {
+    $payload = parse_value($test['input'] ?? null);
+    $expected = normalize_value(parse_value($test['expected_output'] ?? null));
+
+    if (is_array($payload)) {
+        $arguments = array_is_list($payload) ? $payload : array_values($payload);
+    } elseif ($payload === null) {
+        $arguments = [];
+    } else {
+        $arguments = [$payload];
+    }
+
+    try {
+        ob_start();
+        $actualValue = call_user_func_array($functionName, $arguments);
+        ob_end_clean();
+        $actual = normalize_value($actualValue);
+        $accepted = $actual === $expected;
+        $results[] = [
+            'test_name' => $test['name'] ?? null,
+            'visibility' => $test['visibility'] ?? null,
+            'verdict' => $accepted ? 'ACCEPTED' : 'WRONG_ANSWER',
+            'message' => $accepted ? 'passed' : "expected {$expected}, got {$actual}",
+        ];
+    } catch (Throwable $exception) {
+        if (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        $results[] = [
+            'test_name' => $test['name'] ?? null,
+            'visibility' => $test['visibility'] ?? null,
+            'verdict' => 'RUNTIME_ERROR',
+            'message' => $exception->getMessage(),
+        ];
+    }
+}
+
+echo json_encode(['status' => 'OK', 'tests' => $results]);
+PHP;
+    }
+
+    /**
+     * @param  Collection<int, \App\Models\TestCase>  $testCases
+     */
+    private function cppHarness(string $sourceCode, string $functionName, Collection $testCases): string
+    {
+        $cases = $testCases->values()->map(function ($testCase) use ($functionName): string {
+            $payload = $this->parseJsonLikeValue($testCase->input);
+            $arguments = $this->cppArguments($payload);
+            $expected = $this->normalizeComparableValue($this->parseJsonLikeValue($testCase->expected_output));
+
+            return sprintf(
+                <<<'CPP'
+    {
+        std::streambuf* __oldCout = nullptr;
+        try {
+            std::ostringstream __capturedOutput;
+            __oldCout = std::cout.rdbuf(__capturedOutput.rdbuf());
+            auto __actualValue = %s(%s);
+            std::cout.rdbuf(__oldCout);
+            std::string __actual = normalizeValue(__actualValue);
+            std::string __expected = %s;
+            bool __accepted = __actual == __expected;
+            pushResult(__results, %s, %s, __accepted ? "ACCEPTED" : "WRONG_ANSWER", __accepted ? "passed" : "expected " + __expected + ", got " + __actual);
+        } catch (const std::exception& __exception) {
+            if (__oldCout != nullptr) {
+                std::cout.rdbuf(__oldCout);
+            }
+            pushResult(__results, %s, %s, "RUNTIME_ERROR", __exception.what());
+        } catch (...) {
+            if (__oldCout != nullptr) {
+                std::cout.rdbuf(__oldCout);
+            }
+            pushResult(__results, %s, %s, "RUNTIME_ERROR", "Unknown runtime error.");
+        }
+    }
+CPP,
+                $functionName,
+                implode(', ', $arguments),
+                $this->cppStringLiteral($expected),
+                $this->cppStringLiteral($testCase->name ?? 'test'),
+                $this->cppStringLiteral($testCase->visibility ?? 'VISIBLE'),
+                $this->cppStringLiteral($testCase->name ?? 'test'),
+                $this->cppStringLiteral($testCase->visibility ?? 'VISIBLE'),
+                $this->cppStringLiteral($testCase->name ?? 'test'),
+                $this->cppStringLiteral($testCase->visibility ?? 'VISIBLE'),
+            );
+        })->implode("\n");
+
+        return <<<CPP
+#include <exception>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+using namespace std;
+
+{$sourceCode}
+
+string jsonEscape(const string& input) {
+    string output;
+    for (char ch : input) {
+        switch (ch) {
+            case '\\\\': output += "\\\\\\\\"; break;
+            case '"': output += "\\\\\\""; break;
+            case '\\n': output += "\\\\n"; break;
+            case '\\r': output += "\\\\r"; break;
+            case '\\t': output += "\\\\t"; break;
+            default: output += ch;
+        }
+    }
+    return output;
+}
+
+string normalizeValue(const string& value) {
+    return value;
+}
+
+string normalizeValue(const char* value) {
+    return string(value);
+}
+
+string normalizeValue(bool value) {
+    return value ? "true" : "false";
+}
+
+template <typename T>
+string normalizeValue(const vector<T>& values) {
+    string output = "[";
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i > 0) output += ",";
+        output += normalizeValue(values[i]);
+    }
+    output += "]";
+    return output;
+}
+
+template <typename T>
+string normalizeValue(T value) {
+    ostringstream output;
+    output << setprecision(15) << value;
+    return output.str();
+}
+
+void pushResult(vector<string>& results, const string& name, const string& visibility, const string& verdict, const string& message) {
+    ostringstream output;
+    output << "{";
+    output << "\\"test_name\\":\\"" << jsonEscape(name) << "\\",";
+    output << "\\"visibility\\":\\"" << jsonEscape(visibility) << "\\",";
+    output << "\\"verdict\\":\\"" << jsonEscape(verdict) << "\\",";
+    output << "\\"message\\":\\"" << jsonEscape(message) << "\\"";
+    output << "}";
+    results.push_back(output.str());
+}
+
+int main() {
+    vector<string> __results;
+{$cases}
+    cout << "{\\"status\\":\\"OK\\",\\"tests\\":[";
+    for (size_t i = 0; i < __results.size(); ++i) {
+        if (i > 0) cout << ",";
+        cout << __results[i];
+    }
+    cout << "]}";
+    return 0;
+}
+CPP;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function cppArguments(mixed $payload): array
+    {
+        if (is_array($payload)) {
+            $values = array_is_list($payload) ? $payload : array_values($payload);
+
+            return array_map(fn ($value) => $this->cppLiteral($value), $values);
+        }
+
+        if ($payload === null) {
+            return [];
+        }
+
+        return [$this->cppLiteral($payload)];
+    }
+
+    private function parseJsonLikeValue(?string $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $decoded = json_decode($value, true);
+
+        return json_last_error() === JSON_ERROR_NONE ? $decoded : $value;
+    }
+
+    private function normalizeComparableValue(mixed $value): string
+    {
+        if (is_string($value)) {
+            return trim($value);
+        }
+
+        return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    }
+
+    private function cppLiteral(mixed $value): string
+    {
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if (is_string($value)) {
+            return 'std::string('.$this->cppStringLiteral($value).')';
+        }
+
+        if (is_array($value)) {
+            if (! array_is_list($value)) {
+                throw new \InvalidArgumentException('C++ runner supports JSON arrays and scalar values, not objects as single arguments.');
+            }
+
+            if ($value === []) {
+                return 'std::vector<int>{}';
+            }
+
+            $type = $this->cppType($value[0]);
+            $items = array_map(fn ($item) => $this->cppLiteral($item), $value);
+
+            return 'std::vector<'.$type.'>{'.implode(', ', $items).'}';
+        }
+
+        if ($value === null) {
+            throw new \InvalidArgumentException('C++ runner cannot pass null as a function argument.');
+        }
+
+        throw new \InvalidArgumentException('Unsupported C++ test value.');
+    }
+
+    private function cppType(mixed $value): string
+    {
+        if (is_int($value)) {
+            return 'int';
+        }
+
+        if (is_float($value)) {
+            return 'double';
+        }
+
+        if (is_bool($value)) {
+            return 'bool';
+        }
+
+        if (is_string($value)) {
+            return 'std::string';
+        }
+
+        if (is_array($value) && array_is_list($value)) {
+            return 'std::vector<'.$this->cppType($value[0] ?? 0).'>';
+        }
+
+        throw new \InvalidArgumentException('Unsupported C++ test value type.');
+    }
+
+    private function cppStringLiteral(string $value): string
+    {
+        return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
 }

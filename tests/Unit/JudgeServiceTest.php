@@ -6,6 +6,7 @@ use App\Models\Exercise;
 use App\Models\User;
 use App\Services\JudgeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class JudgeServiceTest extends TestCase
@@ -38,6 +39,46 @@ class JudgeServiceTest extends TestCase
             $version,
             'javascript',
             "function add(a, b) {\n  return a + b;\n}\n\nconsole.log(add(5, 3));",
+            $tests,
+        );
+
+        $this->assertSame('ACCEPTED', $result['verdict']);
+    }
+
+    public function test_php_solution_is_executed_and_accepted(): void
+    {
+        $this->seed();
+        $version = Exercise::where('slug', 'sum-two-numbers')->firstOrFail()->activeVersion;
+        $tests = $version->testBundle->visibleTestCases()->get();
+
+        $result = app(JudgeService::class)->evaluate(
+            $version,
+            'php',
+            "function add(\$a, \$b) {\n    return \$a + \$b;\n}",
+            $tests,
+        );
+
+        $this->assertSame('ACCEPTED', $result['verdict']);
+    }
+
+    public function test_cpp_solution_is_executed_and_accepted(): void
+    {
+        $probe = new Process([config('judge.cpp_binary'), '--version']);
+        $probe->setTimeout(2);
+        $probe->run();
+
+        if (! $probe->isSuccessful()) {
+            $this->markTestSkipped('A working g++ binary is required for the C++ judge test.');
+        }
+
+        $this->seed();
+        $version = Exercise::where('slug', 'sum-two-numbers')->firstOrFail()->activeVersion;
+        $tests = $version->testBundle->visibleTestCases()->get();
+
+        $result = app(JudgeService::class)->evaluate(
+            $version,
+            'cpp',
+            "int add(int a, int b) {\n    return a + b;\n}",
             $tests,
         );
 

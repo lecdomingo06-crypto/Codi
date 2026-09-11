@@ -4,9 +4,10 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\CourseController as AdminCourseController;
 use App\Http\Controllers\Admin\ExerciseController as AdminExerciseController;
 use App\Http\Controllers\Admin\LessonController as AdminLessonController;
+use App\Http\Controllers\Admin\ModuleController as AdminModuleController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CommunityController;
 use App\Http\Controllers\CatalogController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExerciseWorkspaceController;
 use App\Http\Controllers\LessonController;
 use App\Http\Controllers\ProfileController;
@@ -25,7 +26,13 @@ Route::middleware('guest')->group(function (): void {
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::middleware('auth')->group(function (): void {
-    Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/community', [CommunityController::class, 'index'])->name('community.index');
+    Route::post('/community', [CommunityController::class, 'store'])->name('community.store');
+    Route::post('/community/{post}/comments', [CommunityController::class, 'comment'])->name('community.comments.store');
+    Route::post('/community/{post}/vote', [CommunityController::class, 'vote'])->name('community.vote');
+    Route::delete('/community/{post}', [CommunityController::class, 'destroy'])->name('community.destroy');
+    Route::redirect('/dashboard', '/community')->name('dashboard');
+    Route::get('/courses', [CatalogController::class, 'courses'])->name('courses.index');
     Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
     Route::get('/courses/{course:slug}', [CatalogController::class, 'show'])->name('courses.show');
     Route::post('/courses/{course:slug}/enroll', [CatalogController::class, 'enroll'])->name('courses.enroll');
@@ -56,6 +63,7 @@ Route::middleware('auth')->group(function (): void {
 Route::middleware(['auth', 'role:ADMIN'])->prefix('/admin')->name('admin.')->group(function (): void {
     Route::get('/', AdminDashboardController::class)->name('dashboard');
     Route::resource('courses', AdminCourseController::class)->except(['show', 'destroy']);
+    Route::resource('modules', AdminModuleController::class)->except(['show', 'destroy']);
     Route::resource('lessons', AdminLessonController::class)->except(['show', 'destroy']);
     Route::get('/exercises/import', [AdminExerciseController::class, 'importForm'])->name('exercises.import.form');
     Route::post('/exercises/import', [AdminExerciseController::class, 'import'])->name('exercises.import');

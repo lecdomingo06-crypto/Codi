@@ -20,10 +20,16 @@ use Illuminate\View\View;
 
 class ExerciseController extends Controller
 {
-    public function index(): View
+    private const SUPPORTED_LANGUAGES = ['python', 'javascript', 'typescript', 'php', 'cpp'];
+
+    public function index(Request $request): View
     {
         return view('admin.exercises.index', [
-            'exercises' => Exercise::with('activeVersion', 'concepts')->latest()->paginate(20),
+            'exercises' => Exercise::with('activeVersion', 'concepts')
+                ->when($request->integer('course_id'), fn ($query, $courseId) => $query->where('course_id', $courseId))
+                ->latest()
+                ->paginate(20)
+                ->withQueryString(),
         ]);
     }
 
@@ -244,13 +250,17 @@ class ExerciseController extends Controller
             'concept_tags' => ['required', 'string'],
             'constraints' => ['nullable', 'string'],
             'supported_languages' => ['required', 'array', 'min:1'],
-            'supported_languages.*' => ['required', Rule::in(['python', 'javascript', 'typescript'])],
+            'supported_languages.*' => ['required', Rule::in(self::SUPPORTED_LANGUAGES)],
             'starter_code_python' => ['nullable', 'string'],
             'starter_code_javascript' => ['nullable', 'string'],
             'starter_code_typescript' => ['nullable', 'string'],
+            'starter_code_php' => ['nullable', 'string'],
+            'starter_code_cpp' => ['nullable', 'string'],
             'function_signature_python' => ['nullable', 'string'],
             'function_signature_javascript' => ['nullable', 'string'],
             'function_signature_typescript' => ['nullable', 'string'],
+            'function_signature_php' => ['nullable', 'string'],
+            'function_signature_cpp' => ['nullable', 'string'],
             'visible_examples_json' => ['nullable', 'json'],
             'visible_tests_json' => ['required', 'json'],
             'hidden_tests_json' => ['required', 'json'],
@@ -258,6 +268,8 @@ class ExerciseController extends Controller
             'official_solution_python' => ['nullable', 'string'],
             'official_solution_javascript' => ['nullable', 'string'],
             'official_solution_typescript' => ['nullable', 'string'],
+            'official_solution_php' => ['nullable', 'string'],
+            'official_solution_cpp' => ['nullable', 'string'],
             'explanation_markdown' => ['nullable', 'string'],
             'time_limit_ms' => ['required', 'integer', 'min:100', 'max:30000'],
             'memory_limit_mb' => ['required', 'integer', 'min:16', 'max:1024'],
@@ -277,7 +289,7 @@ class ExerciseController extends Controller
         $signatures = [];
         $solutions = [];
 
-        foreach (['python', 'javascript', 'typescript'] as $language) {
+        foreach (self::SUPPORTED_LANGUAGES as $language) {
             if (in_array($language, $languages, true)) {
                 $starter[$language] = $validated['starter_code_'.$language] ?? '';
                 $signatures[$language] = $validated['function_signature_'.$language] ?? '';

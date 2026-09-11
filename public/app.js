@@ -143,9 +143,11 @@
     if (browser) {
         const search = browser.querySelector('[data-problem-search]');
         const difficulty = browser.querySelector('select[name="difficulty"]');
+        const topicButtons = [...browser.querySelectorAll('[data-topic-filter]')];
         const rows = [...browser.querySelectorAll('[data-problem-row]')];
         const count = browser.querySelector('[data-problem-count]');
         const empty = browser.querySelector('[data-no-problem-results]');
+        let activeTopic = topicButtons.find((button) => button.classList.contains('active'))?.dataset.topicFilter || '';
         const filterRows = () => {
             const query = search?.value.trim().toLowerCase() || '';
             const selectedDifficulty = difficulty?.value || '';
@@ -153,7 +155,8 @@
             rows.forEach((row) => {
                 const matchesSearch = !query || row.dataset.title.includes(query);
                 const matchesDifficulty = !selectedDifficulty || row.dataset.difficulty === selectedDifficulty;
-                const show = matchesSearch && matchesDifficulty;
+                const matchesTopic = !activeTopic || row.dataset.topic.includes(activeTopic);
+                const show = matchesSearch && matchesDifficulty && matchesTopic;
                 row.hidden = !show;
                 if (show) visible += 1;
             });
@@ -168,7 +171,73 @@
             filterRows();
             search?.focus();
         });
+        topicButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                activeTopic = button.dataset.topicFilter || '';
+                topicButtons.forEach((item) => item.classList.toggle('active', item.dataset.topicFilter === activeTopic));
+                filterRows();
+            });
+        });
         filterRows();
+    }
+
+    const communityModal = document.querySelector('[data-community-compose-modal]');
+    const openCommunityModal = () => {
+        if (!communityModal) return;
+        communityModal.hidden = false;
+        document.body.classList.add('has-modal-open');
+        communityModal.querySelector('input[name="title"]')?.focus();
+    };
+    const closeCommunityModal = () => {
+        if (!communityModal) return;
+        communityModal.hidden = true;
+        document.body.classList.remove('has-modal-open');
+    };
+    const resetCommunityImagePreview = () => {
+        const imageInput = communityModal?.querySelector('[data-community-image-input]');
+        const imageLabel = communityModal?.querySelector('[data-community-image-label]');
+        const imagePreview = communityModal?.querySelector('[data-community-image-preview]');
+
+        if (imageInput) imageInput.value = '';
+        if (imageLabel) imageLabel.textContent = 'Add image';
+        if (imagePreview) {
+            imagePreview.removeAttribute('src');
+            imagePreview.hidden = true;
+        }
+    };
+
+    document.querySelectorAll('[data-community-compose-open]').forEach((button) => {
+        button.addEventListener('click', openCommunityModal);
+    });
+    document.querySelectorAll('[data-community-compose-close]').forEach((button) => {
+        button.addEventListener('click', () => {
+            closeCommunityModal();
+            resetCommunityImagePreview();
+        });
+    });
+    communityModal?.querySelector('[data-community-image-input]')?.addEventListener('change', (event) => {
+        const file = event.target.files?.[0];
+        const imageLabel = communityModal.querySelector('[data-community-image-label]');
+        const imagePreview = communityModal.querySelector('[data-community-image-preview]');
+
+        if (!file) {
+            resetCommunityImagePreview();
+            return;
+        }
+
+        if (imageLabel) imageLabel.textContent = file.name;
+        if (imagePreview) {
+            imagePreview.src = URL.createObjectURL(file);
+            imagePreview.hidden = false;
+        }
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && communityModal && !communityModal.hidden) {
+            closeCommunityModal();
+        }
+    });
+    if (window.CODDY_OPEN_COMMUNITY_COMPOSER) {
+        openCommunityModal();
     }
 
     const form = document.querySelector('[data-auto-check]');
@@ -188,6 +257,14 @@
     let timer = null;
     let checkController = null;
     let actionController = null;
+    let activeLanguage = languageSelect?.value || '';
+    let starterCodes = {};
+
+    try {
+        starterCodes = JSON.parse(editor.dataset.starterCodes || '{}');
+    } catch {
+        starterCodes = {};
+    }
 
     const syncSubmitFields = () => {
         if (submitLanguage && languageSelect) submitLanguage.value = languageSelect.value;
@@ -318,7 +395,17 @@
     };
 
     editor.addEventListener('input', scheduleCheck);
-    languageSelect.addEventListener('change', scheduleCheck);
+    languageSelect.addEventListener('change', () => {
+        const previousStarter = starterCodes[activeLanguage] || '';
+        const canReplaceEditor = !editor.value.trim() || editor.value === previousStarter;
+        activeLanguage = languageSelect.value;
+
+        if (canReplaceEditor && starterCodes[activeLanguage]) {
+            editor.value = starterCodes[activeLanguage];
+        }
+
+        scheduleCheck();
+    });
     runButton.addEventListener('click', runVisibleTests);
     form.addEventListener('submit', runVisibleTests);
     submitForm?.addEventListener('submit', submitSolution);

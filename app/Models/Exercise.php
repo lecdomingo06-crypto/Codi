@@ -52,4 +52,9 @@ class Exercise extends Model
     {
         return $this->hasOne(ExerciseVersion::class)->latestOfMany('version_number');
     }
+
+    public function submissions()
+    {
+        return $this->hasMany(Submission::class);
+    }
 }

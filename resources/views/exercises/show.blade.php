@@ -76,8 +76,9 @@
                     <strong>&lt;/&gt; Editor</strong>
                     <label>Language
                         <select name="language" form="run-form" data-editor-language aria-label="Programming language">
+                            @php($languageLabels = ['python' => 'Python', 'javascript' => 'JavaScript', 'typescript' => 'TypeScript', 'php' => 'PHP', 'cpp' => 'C++'])
                             @foreach($version->supported_languages as $language)
-                                <option value="{{ $language }}" @selected(old('language', $version->supported_languages[0] ?? 'python') === $language)>{{ $language }}</option>
+                                <option value="{{ $language }}" @selected(old('language', $version->supported_languages[0] ?? 'python') === $language)>{{ $languageLabels[$language] ?? $language }}</option>
                             @endforeach
                         </select>
                     </label>
@@ -98,6 +99,7 @@
                         rows="18"
                         spellcheck="false"
                         data-code-editor
+                        data-starter-codes='@json($version->starter_code_by_language)'
                     >{{ old('source_code', $starterCode) }}</textarea>
                 </form>
 

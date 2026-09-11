@@ -3,6 +3,7 @@
 @section('content')
     @php
         $languages = old('supported_languages', $latest->supported_languages ?? ['python', 'javascript']);
+        $availableLanguages = ['python', 'javascript', 'typescript', 'php', 'cpp'];
         $visibleTests = $latest?->testBundle?->testCases?->where('visibility', 'VISIBLE')->map(fn ($test) => ['name' => $test->name, 'input' => $test->input, 'expected_output' => $test->expected_output])->values()->all() ?? [['name' => 'sample 1', 'input' => '{"a":2,"b":3}', 'expected_output' => '5']];
         $hiddenTests = $latest?->testBundle?->testCases?->where('visibility', 'HIDDEN')->map(fn ($test) => ['name' => $test->name, 'input' => $test->input, 'expected_output' => $test->expected_output])->values()->all() ?? [['name' => 'hidden 1', 'input' => '{"a":10,"b":-4}', 'expected_output' => '6']];
         $conceptTags = $exercise->exists ? $exercise->concepts()->pluck('name')->join(', ') : 'functions, arithmetic';
@@ -51,7 +52,7 @@
 
             <fieldset>
                 <legend>Supported languages</legend>
-                @foreach(['python', 'javascript', 'typescript'] as $language)
+                @foreach($availableLanguages as $language)
                     <label class="inline">
                         <input type="checkbox" name="supported_languages[]" value="{{ $language }}" @checked(in_array($language, $languages, true))>
                         {{ $language }}
@@ -59,7 +60,7 @@
                 @endforeach
             </fieldset>
 
-            @foreach(['python', 'javascript', 'typescript'] as $language)
+            @foreach($availableLanguages as $language)
                 <label>Starter code ({{ $language }})
                     <textarea name="starter_code_{{ $language }}" rows="6">{{ old('starter_code_'.$language, $latest->starter_code_by_language[$language] ?? '') }}</textarea>
                 </label>

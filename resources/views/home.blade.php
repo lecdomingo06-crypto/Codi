@@ -8,7 +8,7 @@
             <p class="lead">Learn the concept, test your thinking, and submit solutions in one focused workspace.</p>
             <p class="actions">
                 @auth
-                    <a class="button" href="{{ route('dashboard') }}">Open dashboard</a>
+                    <a class="button" href="{{ route('community.index') }}">Open community</a>
                 @else
                     <a class="button" href="{{ route('register') }}">Start practicing <span aria-hidden="true">→</span></a>
                     <a class="button button--secondary" href="{{ route('login') }}">Sign in</a>
