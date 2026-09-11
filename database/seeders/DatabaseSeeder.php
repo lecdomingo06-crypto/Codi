@@ -63,6 +63,9 @@ class DatabaseSeeder extends Seeder
                 'created_by' => $admin->id,
                 'title' => 'Programming Fundamentals',
                 'summary' => 'A compact path from functions to first coding challenges.',
+                'category' => 'Programming',
+                'duration_minutes' => 90,
+                'difficulty' => 'EASY',
                 'description_markdown' => 'Learn small concepts, practice with guidance, then solve independently.',
                 'publication_status' => 'PUBLISHED',
                 'published_at' => now(),
@@ -78,6 +81,70 @@ class DatabaseSeeder extends Seeder
                 'status' => 'PUBLISHED',
                 'published_at' => now(),
             ]);
+        }
+
+        foreach ([
+            [
+                'slug' => 'patterns-for-problem-solvers',
+                'title' => 'Patterns for Problem Solvers',
+                'summary' => 'Turn arrays, strings, and graphs into a repeatable toolkit for solving challenges.',
+                'category' => 'Data Structures & Algorithms',
+                'duration_minutes' => 240,
+                'difficulty' => 'MEDIUM',
+            ],
+            [
+                'slug' => 'algorithms-in-motion',
+                'title' => 'Algorithms in Motion',
+                'summary' => 'Build intuition for recursion, searching, sorting, and choosing the right trade-off.',
+                'category' => 'Data Structures & Algorithms',
+                'duration_minutes' => 300,
+                'difficulty' => 'HARD',
+            ],
+            [
+                'slug' => 'python-for-problem-solvers',
+                'title' => 'Python for Problem Solvers',
+                'summary' => 'Write clear Python while learning the language features that make solutions concise.',
+                'category' => 'Python',
+                'duration_minutes' => 180,
+                'difficulty' => 'EASY',
+            ],
+            [
+                'slug' => 'web-foundations',
+                'title' => 'Web Foundations',
+                'summary' => 'Understand how browsers, requests, and server-rendered pages work together.',
+                'category' => 'Web Development',
+                'duration_minutes' => 210,
+                'difficulty' => 'EASY',
+            ],
+            [
+                'slug' => 'designing-reliable-services',
+                'title' => 'Designing Reliable Services',
+                'summary' => 'Practice the decisions behind resilient APIs, storage, queues, and growing systems.',
+                'category' => 'System Design',
+                'duration_minutes' => 270,
+                'difficulty' => 'HARD',
+            ],
+        ] as $catalogCourse) {
+            $seededCourse = Course::updateOrCreate(
+                ['slug' => $catalogCourse['slug']],
+                $catalogCourse + [
+                    'created_by' => $admin->id,
+                    'description_markdown' => $catalogCourse['summary'],
+                    'publication_status' => 'PUBLISHED',
+                    'published_at' => now(),
+                ],
+            );
+
+            if (! $seededCourse->versions()->exists()) {
+                $seededCourse->versions()->create([
+                    'version_number' => 1,
+                    'title' => $seededCourse->title,
+                    'summary' => $seededCourse->summary,
+                    'description_markdown' => $seededCourse->description_markdown,
+                    'status' => 'PUBLISHED',
+                    'published_at' => now(),
+                ]);
+            }
         }
 
         $lesson = Lesson::updateOrCreate(

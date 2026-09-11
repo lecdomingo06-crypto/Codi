@@ -18,12 +18,18 @@ class Course extends Model
         return [
             'published_at' => 'datetime',
             'archived_at' => 'datetime',
+            'duration_minutes' => 'integer',
         ];
     }
 
     public function lessons()
     {
         return $this->hasMany(Lesson::class)->orderBy('sort_order');
+    }
+
+    public function modules()
+    {
+        return $this->hasMany(Module::class)->orderBy('sort_order');
     }
 
     public function versions()

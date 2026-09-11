@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\CourseController as AdminCourseController;
 use App\Http\Controllers\Admin\ExerciseController as AdminExerciseController;
 use App\Http\Controllers\Admin\LessonController as AdminLessonController;
+use App\Http\Controllers\Admin\ModuleController as AdminModuleController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\DashboardController;
@@ -27,6 +28,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->n
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/catalog', [CatalogController::class, 'index'])->name('catalog.index');
+    Route::get('/courses', [CatalogController::class, 'courses'])->name('courses.index');
     Route::get('/courses/{course:slug}', [CatalogController::class, 'show'])->name('courses.show');
     Route::post('/courses/{course:slug}/enroll', [CatalogController::class, 'enroll'])->name('courses.enroll');
     Route::get('/lessons/{lesson:slug}', [LessonController::class, 'show'])->name('lessons.show');
@@ -56,6 +58,7 @@ Route::middleware('auth')->group(function (): void {
 Route::middleware(['auth', 'role:ADMIN'])->prefix('/admin')->name('admin.')->group(function (): void {
     Route::get('/', AdminDashboardController::class)->name('dashboard');
     Route::resource('courses', AdminCourseController::class)->except(['show', 'destroy']);
+    Route::resource('modules', AdminModuleController::class)->except(['show', 'destroy']);
     Route::resource('lessons', AdminLessonController::class)->except(['show', 'destroy']);
     Route::get('/exercises/import', [AdminExerciseController::class, 'importForm'])->name('exercises.import.form');
     Route::post('/exercises/import', [AdminExerciseController::class, 'import'])->name('exercises.import');
