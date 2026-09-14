@@ -65,6 +65,53 @@ class SubmissionWorkflowTest extends TestCase
         $this->assertSame(0, DailyExerciseActivity::count());
     }
 
+    public function test_first_accepted_submit_of_day_returns_daily_streak_completion(): void
+    {
+        $this->seed();
+        $user = User::where('role', 'USER')->firstOrFail();
+        $exercise = Exercise::where('slug', 'sum-two-numbers')->firstOrFail();
+
+        $this->actingAs($user)
+            ->postJson(route('exercises.submit', $exercise), [
+                'idempotency_key' => 'first-accepted-today',
+                'language' => 'python',
+                'source_code' => "def add(a, b):\n    return a + b",
+            ])
+            ->assertCreated()
+            ->assertJsonPath('verdict', 'ACCEPTED')
+            ->assertJsonPath('completion.type', 'daily_streak')
+            ->assertJsonPath('completion.current_streak', 1)
+            ->assertJsonPath('completion.longest_streak', 1);
+    }
+
+    public function test_later_accepted_submit_of_same_day_returns_regular_completion(): void
+    {
+        $this->seed();
+        $user = User::where('role', 'USER')->firstOrFail();
+        $firstExercise = Exercise::where('slug', 'sum-two-numbers')->firstOrFail();
+        $secondExercise = Exercise::where('slug', 'subtract-two-numbers')->firstOrFail();
+
+        $this->actingAs($user)
+            ->postJson(route('exercises.submit', $firstExercise), [
+                'idempotency_key' => 'daily-streak-first',
+                'language' => 'python',
+                'source_code' => "def add(a, b):\n    return a + b",
+            ])
+            ->assertCreated()
+            ->assertJsonPath('completion.type', 'daily_streak');
+
+        $this->actingAs($user)
+            ->postJson(route('exercises.submit', $secondExercise), [
+                'idempotency_key' => 'daily-streak-second',
+                'language' => 'python',
+                'source_code' => "def subtract(a, b):\n    return a - b",
+            ])
+            ->assertCreated()
+            ->assertJsonPath('verdict', 'ACCEPTED')
+            ->assertJsonPath('completion.type', 'problem_completed')
+            ->assertJsonPath('completion.current_streak', 1);
+    }
+
     public function test_auto_check_uses_visible_tests_without_persisting_activity_or_runs(): void
     {
         $this->seed();
@@ -85,6 +132,24 @@ class SubmissionWorkflowTest extends TestCase
         $this->assertSame(0, Submission::count());
         $this->assertSame(0, DailyExerciseActivity::count());
         $this->assertSame(0, $user->streak()->first()->current_streak);
+    }
+
+    public function test_workspace_includes_completion_notification_shell(): void
+    {
+        $this->seed();
+        $user = User::where('role', 'USER')->firstOrFail();
+        $exercise = Exercise::where('slug', 'sum-two-numbers')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get(route('exercises.show', $exercise))
+            ->assertOk()
+            ->assertSee('data-completion-toast', false)
+            ->assertSee('data-exercise-title="Sum Two Numbers"', false)
+            ->assertSee('Problem completed')
+            ->assertSee('View progress')
+            ->assertSee('data-daily-streak-modal', false)
+            ->assertSee('Daily Streak!')
+            ->assertSee('data-daily-streak-current', false);
     }
 
     public function test_reusing_submission_idempotency_key_returns_existing_submission_without_inflating_activity(): void

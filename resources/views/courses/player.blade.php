@@ -1,12 +1,13 @@
 @php
     $isAdmin = $isAdmin ?? auth()->user()->isAdmin();
-    $isEnrolled = $isEnrolled ?? auth()->user()->enrollments()->where('course_id', $course->id)->exists();
+    $isStandaloneLesson = ! $course;
+    $isEnrolled = $isEnrolled ?? ($course ? auth()->user()->enrollments()->where('course_id', $course->id)->exists() : true);
     $currentModule = $lesson?->module;
     $moduleLessons = $currentModule
         ? $currentModule->lessons->where('publication_status', 'PUBLISHED')->sortBy('sort_order')->values()
         : $courseLessons;
     $standaloneLessons = $courseLessons->whereNull('module_id')->values();
-    $sidebarStandaloneLessons = $course->modules->isEmpty() ? $courseLessons : $standaloneLessons;
+    $sidebarStandaloneLessons = $course && $course->modules->isNotEmpty() ? $standaloneLessons : $courseLessons;
 @endphp
 
 <section class="course-player-shell">
@@ -14,7 +15,7 @@
         <nav class="course-player-breadcrumb" aria-label="Breadcrumb">
             <a href="{{ route('courses.index') }}">Courses</a>
             <span aria-hidden="true">/</span>
-            <strong>{{ $course->title }}</strong>
+            <strong>{{ $course?->title ?? 'Standalone Lesson' }}</strong>
         </nav>
 
         <div class="course-player-progress">
@@ -26,7 +27,7 @@
         </div>
 
         <div class="course-player-nav">
-            @if($course->modules->isNotEmpty())
+            @if($course && $course->modules->isNotEmpty())
                 @foreach($course->modules as $module)
                     <section class="course-player-module">
                         <header>
@@ -46,7 +47,7 @@
                 @endforeach
             @endif
 
-            @if($course->modules->isEmpty() || $standaloneLessons->isNotEmpty())
+            @if(! $course || $course->modules->isEmpty() || $standaloneLessons->isNotEmpty())
                 <section class="course-player-module">
                     <header>
                         <h2>Lessons</h2>
@@ -74,7 +75,7 @@
                         <iframe src="{{ $lesson->videoEmbedUrl() }}" title="{{ $lesson->title }}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
                     @else
                         <div class="course-video-placeholder">
-                            <span>{{ $course->title }}</span>
+                            <span>{{ $course?->title ?? 'Lesson' }}</span>
                             <strong>{{ $lesson->title }}</strong>
                             <p>{{ $lesson->summary }}</p>
                         </div>
@@ -138,7 +139,7 @@
 
                     <section class="lesson-module-list" id="module-lessons">
                         <header>
-                            <h2>{{ $currentModule ? $currentModule->title : 'Course lessons' }}</h2>
+                            <h2>{{ $currentModule ? $currentModule->title : ($isStandaloneLesson ? 'Lesson' : 'Course lessons') }}</h2>
                             <span>{{ $moduleLessons->count() }} {{ $moduleLessons->count() === 1 ? 'lesson' : 'lessons' }}</span>
                         </header>
                         <div>

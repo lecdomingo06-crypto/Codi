@@ -41,7 +41,10 @@ class CommunityPageTest extends TestCase
         $this->actingAs($user)
             ->get(route('community.index'))
             ->assertOk()
-            ->assertSee('/storage/community/', false);
+            ->assertSee('/storage/community/', false)
+            ->assertSee('class="post-image post-image-button"', false)
+            ->assertSee(route('community.users.show', $user), false)
+            ->assertSee('data-community-thread-open="'.$post->id.'"', false);
     }
 
     public function test_user_can_comment_and_vote_on_post(): void
@@ -58,7 +61,7 @@ class CommunityPageTest extends TestCase
             ->post(route('community.comments.store', $post), [
                 'body' => 'Draw the call stack first.',
             ])
-            ->assertRedirect(route('community.index').'#post-'.$post->id);
+            ->assertRedirect(route('community.index', ['thread' => $post->id]).'#post-'.$post->id);
 
         $this->assertDatabaseHas('community_comments', [
             'community_post_id' => $post->id,
@@ -75,6 +78,193 @@ class CommunityPageTest extends TestCase
             'user_id' => $user->id,
             'value' => 1,
         ]);
+    }
+
+    public function test_user_can_vote_without_page_reload(): void
+    {
+        $user = User::factory()->create();
+        $post = CommunityPost::create([
+            'user_id' => $user->id,
+            'title' => 'Vote without jumping',
+            'body' => 'Voting should update in place.',
+            'tag' => 'QUESTION',
+        ]);
+
+        $this->actingAs($user)
+            ->postJson(route('community.vote', $post), ['value' => 1])
+            ->assertOk()
+            ->assertJson([
+                'post_id' => $post->id,
+                'score' => 1,
+                'user_vote' => 1,
+            ]);
+
+        $this->actingAs($user)
+            ->postJson(route('community.vote', $post), ['value' => 1])
+            ->assertOk()
+            ->assertJson([
+                'post_id' => $post->id,
+                'score' => 0,
+                'user_vote' => 0,
+            ]);
+    }
+
+    public function test_community_comments_open_in_thread_modal(): void
+    {
+        $user = User::factory()->create(['name' => 'Jeric Giang']);
+        $commenter = User::factory()->create(['name' => 'Anonymous participant 590']);
+
+        $post = CommunityPost::create([
+            'user_id' => $user->id,
+            'title' => 'Need help with arrays',
+            'body' => 'How do I compare both ends cleanly?',
+            'tag' => 'HELP',
+        ]);
+
+        $post->comments()->create([
+            'user_id' => $commenter->id,
+            'body' => 'Try using left and right pointers.',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('community.index', ['thread' => $post->id]))
+            ->assertOk()
+            ->assertSee('data-community-thread-open="'.$post->id.'"', false)
+            ->assertSee('data-community-share-open="'.$post->id.'"', false)
+            ->assertSee('id="community-share-'.$post->id.'"', false)
+            ->assertSee(route('community.users.show', $user), false)
+            ->assertSee(route('community.users.show', $commenter), false)
+            ->assertSeeText("Jeric Giang's Post", false)
+            ->assertSee('Most relevant')
+            ->assertSee('Try using left and right pointers.')
+            ->assertSee('placeholder="Comment as Jeric Giang"', false)
+            ->assertSee('Say something about this...', false)
+            ->assertSee('Share to Community')
+            ->assertSee('Copy link')
+            ->assertSee('window.CODDY_OPEN_COMMUNITY_THREAD', false)
+            ->assertDontSee('class="thread-action-row"', false)
+            ->assertDontSee('class="post-comments"', false);
+    }
+
+    public function test_user_can_view_community_profile_posts(): void
+    {
+        $viewer = User::factory()->create();
+        $profileUser = User::factory()->create(['name' => 'King Lee']);
+        $otherUser = User::factory()->create(['name' => 'Other Learner']);
+
+        $profilePost = CommunityPost::create([
+            'user_id' => $profileUser->id,
+            'title' => 'King Lee first community post',
+            'body' => 'This should appear on King Lee profile.',
+            'tag' => 'SHOWCASE',
+            'image_path' => 'community/profile-post.png',
+        ]);
+
+        CommunityPost::create([
+            'user_id' => $otherUser->id,
+            'title' => 'Other user post',
+            'body' => 'This should not appear on King Lee profile.',
+            'tag' => 'HELP',
+        ]);
+
+        $this->actingAs($viewer)
+            ->get(route('community.users.show', $profileUser))
+            ->assertOk()
+            ->assertSee('King Lee')
+            ->assertSee('Personal details')
+            ->assertSee('King Lee first community post')
+            ->assertSee('<div class="community-profile-cover" aria-hidden="true"></div>', false)
+            ->assertSee('class="community-profile-post-image community-profile-post-image-button"', false)
+            ->assertSee('data-community-thread-open="'.$profilePost->id.'"', false)
+            ->assertSee('id="community-thread-'.$profilePost->id.'"', false)
+            ->assertSee('name="return_to" value="community-user"', false)
+            ->assertSee('View discussion')
+            ->assertDontSee('href="'.route('community.index', ['thread' => $profilePost->id]).'#post-'.$profilePost->id.'"', false)
+            ->assertDontSee('Other user post');
+
+        $this->actingAs($viewer)
+            ->post(route('community.comments.store', $profilePost), [
+                'body' => 'This profile modal comment stays here.',
+                'return_to' => 'community-user',
+                'profile_user_id' => $profileUser->id,
+            ])
+            ->assertRedirect(route('community.users.show', [
+                'user' => $profileUser->id,
+                'thread' => $profilePost->id,
+            ]).'#post-'.$profilePost->id);
+    }
+
+    public function test_user_can_share_post_to_community_feed(): void
+    {
+        $author = User::factory()->create(['name' => 'Original Author']);
+        $sharer = User::factory()->create(['name' => 'Learner']);
+
+        $post = CommunityPost::create([
+            'user_id' => $author->id,
+            'title' => 'AI is Already Better at Coding Than Most Software Developers',
+            'body' => 'This post is worth discussing with the group.',
+            'tag' => 'QUESTION',
+        ]);
+
+        $response = $this->actingAs($sharer)
+            ->post(route('community.share', $post), [
+                'body' => 'This helped me think about architecture differently.',
+            ]);
+
+        $sharedPost = CommunityPost::where('shared_post_id', $post->id)->firstOrFail();
+
+        $response->assertRedirect(route('community.index', ['filter' => 'NEW', 'thread' => $sharedPost->id]).'#post-'.$sharedPost->id);
+
+        $this->assertSame($sharer->id, $sharedPost->user_id);
+        $this->assertSame('SHOWCASE', $sharedPost->tag);
+        $this->assertSame('This helped me think about architecture differently.', $sharedPost->body);
+        $this->assertStringStartsWith('Shared: AI is Already Better', $sharedPost->title);
+
+        $this->actingAs($sharer)
+            ->get(route('community.index', ['filter' => 'NEW']))
+            ->assertOk()
+            ->assertSee('Shared from Original Author')
+            ->assertSee('AI is Already Better at Coding Than Most Software Developers')
+            ->assertSee('This helped me think about architecture differently.');
+    }
+
+    public function test_deleting_shared_post_keeps_original_post(): void
+    {
+        $author = User::factory()->create(['name' => 'Original Author']);
+        $sharer = User::factory()->create(['name' => 'Learner']);
+
+        $originalPost = CommunityPost::create([
+            'user_id' => $author->id,
+            'title' => 'Original architecture discussion',
+            'body' => 'This post belongs to someone else.',
+            'tag' => 'QUESTION',
+        ]);
+
+        $sharedPost = CommunityPost::create([
+            'user_id' => $sharer->id,
+            'title' => 'Shared: Original architecture discussion',
+            'body' => 'Sharing this with the community.',
+            'tag' => 'SHOWCASE',
+            'shared_post_id' => $originalPost->id,
+        ]);
+
+        $this->actingAs($sharer)
+            ->delete(route('community.destroy', $sharedPost), [
+                'filter' => 'MINE',
+            ])
+            ->assertRedirect(route('community.index', ['thread' => $originalPost->id]).'#post-'.$originalPost->id)
+            ->assertSessionHas('status', 'Shared post deleted. Original post was kept.');
+
+        $this->assertDatabaseMissing('community_posts', ['id' => $sharedPost->id]);
+        $this->assertDatabaseHas('community_posts', [
+            'id' => $originalPost->id,
+            'user_id' => $author->id,
+            'title' => 'Original architecture discussion',
+        ]);
+
+        $this->actingAs($sharer)
+            ->delete(route('community.destroy', $originalPost))
+            ->assertForbidden();
     }
 
     public function test_user_can_filter_to_my_posts(): void
@@ -101,6 +291,17 @@ class CommunityPageTest extends TestCase
             ->assertOk()
             ->assertSee('My dynamic programming question')
             ->assertDontSee('Someone else post');
+    }
+
+    public function test_community_uses_navbar_post_search_instead_of_sidebar_search_card(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('community.index'))
+            ->assertOk()
+            ->assertSee('placeholder="Search posts"', false)
+            ->assertDontSee('community-search-card');
     }
 
     public function test_owner_can_delete_post_and_uploaded_image(): void

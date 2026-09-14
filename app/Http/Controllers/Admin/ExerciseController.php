@@ -5,10 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Concept;
-use App\Models\Course;
 use App\Models\Exercise;
 use App\Models\ExerciseVersion;
-use App\Models\Lesson;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +24,6 @@ class ExerciseController extends Controller
     {
         return view('admin.exercises.index', [
             'exercises' => Exercise::with('activeVersion', 'concepts')
-                ->when($request->integer('course_id'), fn ($query, $courseId) => $query->where('course_id', $courseId))
                 ->latest()
                 ->paginate(20)
                 ->withQueryString(),
@@ -44,8 +41,8 @@ class ExerciseController extends Controller
 
         $exercise = DB::transaction(function () use ($request, $data): Exercise {
             $exercise = Exercise::create([
-                'course_id' => $data['course_id'],
-                'lesson_id' => $data['lesson_id'],
+                'course_id' => null,
+                'lesson_id' => null,
                 'created_by' => $request->user()->id,
                 'title' => $data['title'],
                 'slug' => $data['slug'],
@@ -73,8 +70,8 @@ class ExerciseController extends Controller
 
         DB::transaction(function () use ($request, $exercise, $data): void {
             $exercise->update([
-                'course_id' => $data['course_id'],
-                'lesson_id' => $data['lesson_id'],
+                'course_id' => null,
+                'lesson_id' => null,
                 'title' => $data['title'],
                 'slug' => $data['slug'],
                 'summary' => $data['summary'],
@@ -229,8 +226,6 @@ class ExerciseController extends Controller
         return view('admin.exercises.form', [
             'exercise' => $exercise,
             'latest' => $latest,
-            'courses' => Course::orderBy('title')->get(),
-            'lessons' => Lesson::orderBy('title')->get(),
         ]);
     }
 
@@ -240,8 +235,6 @@ class ExerciseController extends Controller
     private function validatedPayload(Request $request, ?Exercise $exercise = null): array
     {
         $validated = $request->validate([
-            'course_id' => ['nullable', 'exists:courses,id'],
-            'lesson_id' => ['nullable', 'exists:lessons,id'],
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255', Rule::unique('exercises', 'slug')->ignore($exercise)],
             'summary' => ['required', 'string', 'max:255'],
@@ -308,8 +301,8 @@ class ExerciseController extends Controller
         }
 
         return [
-            'course_id' => $validated['course_id'] ?? null,
-            'lesson_id' => $validated['lesson_id'] ?? null,
+            'course_id' => null,
+            'lesson_id' => null,
             'title' => $validated['title'],
             'slug' => $validated['slug'] ?: Str::slug($validated['title']),
             'summary' => $validated['summary'],

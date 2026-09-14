@@ -12,8 +12,38 @@ class CoursePlayerService
     /**
      * @return array<string, mixed>
      */
-    public function build(Course $course, User $user, ?Lesson $currentLesson = null): array
+    public function build(?Course $course, User $user, ?Lesson $currentLesson = null): array
     {
+        if (! $course) {
+            $currentLesson?->loadMissing([
+                'module',
+                'exercises' => fn ($query) => $query->where('publication_status', 'PUBLISHED')->with('concepts'),
+            ]);
+
+            $orderedLessons = $currentLesson ? collect([$currentLesson]) : collect();
+            $completedLessonIds = DB::table('lesson_progress')
+                ->where('user_id', $user->id)
+                ->where('status', 'COMPLETED')
+                ->whereIn('lesson_id', $orderedLessons->pluck('id'))
+                ->pluck('lesson_id')
+                ->map(fn ($id) => (int) $id);
+
+            return [
+                'course' => null,
+                'lesson' => $currentLesson,
+                'courseLessons' => $orderedLessons,
+                'completedLessonIds' => $completedLessonIds,
+                'completedLessonsCount' => $completedLessonIds->count(),
+                'totalLessons' => $orderedLessons->count(),
+                'progressPercent' => $orderedLessons->isNotEmpty() && $completedLessonIds->isNotEmpty() ? 100 : 0,
+                'currentLessonNumber' => $currentLesson ? 1 : 0,
+                'previousLesson' => null,
+                'nextLesson' => null,
+                'isCompleted' => $currentLesson ? $completedLessonIds->contains($currentLesson->id) : false,
+                'suggestedExercises' => $currentLesson?->exercises ?? collect(),
+            ];
+        }
+
         $course->load([
             'modules' => fn ($query) => $query->orderBy('sort_order')->orderBy('title'),
             'modules.lessons' => fn ($query) => $query->where('publication_status', 'PUBLISHED')->orderBy('sort_order')->orderBy('title'),

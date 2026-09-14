@@ -10,6 +10,18 @@
     $trackTitle = $primaryCourse?->title ?? 'Core Skills';
     $trackSummary = $primaryCourse?->description ?? 'Practice common data structures, algorithms, and coding interview problems.';
     $topTopic = $topics->first();
+    $activeMenu = request('menu', 'problems');
+    $userTimezone = auth()->user()->timezone ?: config('app.timezone');
+    $todayLocal = now($userTimezone);
+    $todayCalendar = collect($monthCalendar['days'])->firstWhere('date', $todayLocal->toDateString());
+    $acceptedToday = (int) ($todayCalendar['accepted_answer_count'] ?? 0);
+    $dailyGoal = 5;
+    $dailyGoalProgress = min(100, (int) round(($acceptedToday / $dailyGoal) * 100));
+    $resetAt = $todayLocal->copy()->endOfDay()->toIso8601String();
+    $menuLink = fn (string $menu, array $params = []) => route('catalog.index', array_filter(array_merge([
+        'menu' => $menu === 'problems' ? null : $menu,
+        'month' => request('month'),
+    ], $params), fn ($value) => filled($value)));
 @endphp
 
 @section('content')
@@ -19,34 +31,52 @@
                 <strong>Menu</strong>
                 <span aria-hidden="true">&lt;-</span>
             </header>
-            <nav class="practice-menu">
-                <a class="practice-menu__group is-open" href="{{ route('catalog.index') }}">
-                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-2-11-4 14"/></svg>
-                    <span>Coding Interviews</span>
-                    <b>v</b>
-                </a>
-                <a class="is-active" href="{{ route('catalog.index') }}">Problems</a>
-                <a href="{{ route('catalog.index', ['sort' => 'difficulty']) }}">Company Tagged</a>
-                <a href="{{ route('progress.show') }}">Cheatsheets</a>
-                <a href="{{ route('community.index') }}">Quizzes</a>
-                <a class="practice-menu__group" href="{{ route('catalog.index', ['search' => 'ai']) }}">
-                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v4m0 10v4m9-9h-4M7 12H3m15.07-6.07-2.83 2.83M8.76 15.24l-2.83 2.83m12.14 0-2.83-2.83M8.76 8.76 5.93 5.93"/></svg>
-                    <span>AI Coding</span>
-                    <em>Beta</em>
-                </a>
-                <a class="practice-menu__group" href="{{ route('catalog.index', ['search' => 'system']) }}">
-                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 0v18m8-13.5-8 4.5-8-4.5"/></svg>
-                    <span>System Design</span>
-                </a>
-                <a class="practice-menu__group" href="{{ route('catalog.index', ['search' => 'machine']) }}">
-                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 7h12v10H6zM9 3v4m6-4v4M9 17v4m6-4v4M3 10h3m15 0h-3M3 14h3m15 0h-3"/></svg>
-                    <span>Machine Learning</span>
-                    <b>&gt;</b>
-                </a>
-                <a class="practice-menu__group" href="{{ route('catalog.index', ['search' => 'database']) }}">
-                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 7c0 2 14 2 14 0S5 5 5 7Zm0 0v10c0 2 14 2 14 0V7M5 12c0 2 14 2 14 0"/></svg>
-                    <span>Databases</span>
-                </a>
+            <nav class="practice-menu" aria-label="Problem categories">
+                <section class="practice-menu-section">
+                    <a class="practice-menu__group {{ in_array($activeMenu, ['problems', 'company', 'cheatsheets', 'quizzes'], true) ? 'is-open' : '' }}" href="{{ $menuLink('problems') }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-2-11-4 14"/></svg>
+                        <span>Coding Interviews</span>
+                        <b aria-hidden="true">v</b>
+                    </a>
+                    <div class="practice-submenu">
+                        <a class="{{ $activeMenu === 'problems' ? 'is-active' : '' }}" href="{{ $menuLink('problems') }}">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                            <span>Problems</span>
+                        </a>
+                        <a class="{{ $activeMenu === 'company' ? 'is-active' : '' }}" href="{{ $menuLink('company', ['sort' => 'difficulty']) }}">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 21V7l8-4 8 4v14M9 21v-8h6v8M8 9h.01M12 9h.01M16 9h.01"/></svg>
+                            <span>Company Tagged</span>
+                        </a>
+                        <a class="{{ $activeMenu === 'cheatsheets' ? 'is-active' : '' }}" href="{{ $menuLink('cheatsheets', ['search' => 'array']) }}">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4"/></svg>
+                            <span>Cheatsheets</span>
+                        </a>
+                        <a class="{{ $activeMenu === 'quizzes' ? 'is-active' : '' }}" href="{{ $menuLink('quizzes') }}">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.7 1.4-2.9 1.5-2.9 3.5M12 18h.01"/></svg>
+                            <span>Quizzes</span>
+                        </a>
+                    </div>
+                </section>
+                <section class="practice-menu-section" aria-label="Learning tracks">
+                    <a class="practice-menu__group {{ $activeMenu === 'ai' ? 'is-active' : '' }}" href="{{ $menuLink('ai', ['search' => 'ai']) }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v4m0 10v4m9-9h-4M7 12H3m15.07-6.07-2.83 2.83M8.76 15.24l-2.83 2.83m12.14 0-2.83-2.83M8.76 8.76 5.93 5.93"/></svg>
+                        <span>AI Coding</span>
+                        <em>Beta</em>
+                    </a>
+                    <a class="practice-menu__group {{ $activeMenu === 'system-design' ? 'is-active' : '' }}" href="{{ $menuLink('system-design', ['search' => 'system']) }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 0v18m8-13.5-8 4.5-8-4.5"/></svg>
+                        <span>System Design</span>
+                    </a>
+                    <a class="practice-menu__group {{ $activeMenu === 'machine-learning' ? 'is-active' : '' }}" href="{{ $menuLink('machine-learning', ['search' => 'machine']) }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 7h12v10H6zM9 3v4m6-4v4M9 17v4m6-4v4M3 10h3m15 0h-3M3 14h3m15 0h-3"/></svg>
+                        <span>Machine Learning</span>
+                        <b aria-hidden="true">&gt;</b>
+                    </a>
+                    <a class="practice-menu__group {{ $activeMenu === 'databases' ? 'is-active' : '' }}" href="{{ $menuLink('databases', ['search' => 'database']) }}">
+                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 7c0 2 14 2 14 0S5 5 5 7Zm0 0v10c0 2 14 2 14 0V7M5 12c0 2 14 2 14 0"/></svg>
+                        <span>Databases</span>
+                    </a>
+                </section>
             </nav>
         </aside>
 
@@ -103,6 +133,9 @@
 
             <section class="problem-toolbar" aria-label="Problem filters">
                 <form method="GET" class="practice-search">
+                    @if($activeMenu !== 'problems')
+                        <input type="hidden" name="menu" value="{{ $activeMenu }}">
+                    @endif
                     <label class="search-field">
                         <span class="sr-only">Search problems</span>
                         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
@@ -126,15 +159,23 @@
                     </label>
                     <button type="submit" class="button--secondary">Apply</button>
                 </form>
-                <div class="toolbar-icons" aria-hidden="true">
-                    <span><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></span>
-                    <span><svg viewBox="0 0 24 24"><path d="M6 7h12m-10 0 1 13h6l1-13M9 7V4h6v3"/></svg></span>
-                    <span><svg viewBox="0 0 24 24"><path d="M12 8v4l3 2m5-2a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg></span>
+                <div class="toolbar-icons">
+                    <button type="button" class="toolbar-icon-button" data-random-problem aria-label="Choose random problem" aria-pressed="false">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+                        <span role="tooltip" data-random-tooltip>Choose random problem</span>
+                    </button>
+                    <button type="button" class="toolbar-icon-button" aria-label="Delete progress">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12m-10 0 1 13h6l1-13M9 7V4h6v3"/></svg>
+                        <span role="tooltip">Delete progress</span>
+                    </button>
+                    <button type="button" class="toolbar-icon-button" data-practice-about-open aria-label="What is this?" aria-haspopup="dialog" aria-controls="practice-about-modal">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 2m5-2a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+                        <span role="tooltip">What is this?</span>
+                    </button>
                 </div>
             </section>
 
             <section class="practice-problem-list">
-                <h2>Implement Data Structures</h2>
                 <div class="practice-table" role="table" aria-label="Problems">
                     <div class="practice-table__head" role="row">
                         <span role="columnheader">Status</span>
@@ -203,8 +244,8 @@
                     </a>
                 </header>
                 <div class="dark-calendar__meta">
-                    <strong>Day {{ now(auth()->user()->timezone ?: config('app.timezone'))->day }}</strong>
-                    <span>{{ $streak->current_streak }} day streak</span>
+                    <strong>Day {{ $todayLocal->day }}</strong>
+                    <span data-calendar-countdown data-reset-at="{{ $resetAt }}">{{ $todayLocal->diff($todayLocal->copy()->endOfDay())->format('%H:%I:%S') }} left</span>
                 </div>
                 <div class="dark-calendar__weekdays" aria-hidden="true">
                     @foreach(['S', 'M', 'T', 'W', 'T', 'F', 'S'] as $weekday)
@@ -220,8 +261,27 @@
                     @endforeach
                 </div>
                 <div class="streak-tiles">
-                    <article><span>Current Streak</span><strong>{{ $streak->current_streak }} days</strong></article>
-                    <article><span>Best Streak</span><strong>{{ $streak->longest_streak }} days</strong></article>
+                    <article>
+                        <span>Current Streak</span>
+                        <strong>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22c4 0 7-2.7 7-6.8 0-2.7-1.6-5.1-3.4-6.9-.3 2.1-1.4 3.5-2.8 4.2.5-3.6-.9-6.7-3.4-9.5-.2 3.1-1.9 5.2-3.1 6.7C5.4 11 5 12.6 5 15.2 5 19.3 8 22 12 22Z"/></svg>
+                            {{ $streak->current_streak }} {{ $streak->current_streak === 1 ? 'day' : 'days' }}
+                        </strong>
+                    </article>
+                    <article>
+                        <span>Best Streak</span>
+                        <strong>
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Zm10 2h3v2a3 3 0 0 1-3 3M7 6H4v2a3 3 0 0 0 3 3"/></svg>
+                            {{ $streak->longest_streak }} {{ $streak->longest_streak === 1 ? 'day' : 'days' }}
+                        </strong>
+                    </article>
+                </div>
+                <div class="daily-goal-strip" style="--daily-goal-progress: {{ $dailyGoalProgress }}%" aria-label="{{ $acceptedToday }} of {{ $dailyGoal }} daily solves">
+                    <strong><span aria-hidden="true">♥</span>{{ $acceptedToday }}</strong>
+                    <div>
+                        <span>{{ $acceptedToday }}/{{ $dailyGoal }} to next</span>
+                        <i aria-hidden="true"></i>
+                    </div>
                 </div>
                 <p>Solve one problem a day to keep your streak.</p>
             </section>
@@ -231,5 +291,26 @@
                 <p>Keep solving to climb your ranking.</p>
             </section>
         </aside>
+
+        <div class="practice-about-modal" id="practice-about-modal" data-practice-about-modal hidden role="dialog" aria-modal="true" aria-labelledby="practice-about-title">
+            <div class="practice-about-modal__backdrop" data-practice-about-close></div>
+            <section class="practice-about-modal__card" role="document">
+                <header>
+                    <h2 id="practice-about-title">About</h2>
+                    <button type="button" class="icon-button" data-practice-about-close aria-label="Close about popup">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </header>
+                <div class="practice-about-modal__body">
+                    <p>Hi, I created Coddy to make coding practice easier and more focused.</p>
+                    <ul>
+                        <li><strong>Core Skills</strong> is a beginner friendly list of coding practice problems.</li>
+                        <li><strong>Courses</strong> help you learn lessons step by step before solving exercises.</li>
+                        <li><strong>Problems</strong> let you write code, run visible tests, and submit your answer.</li>
+                        <li>Use the random button when you want the system to choose your next challenge.</li>
+                    </ul>
+                </div>
+            </section>
+        </div>
     </section>
 @endsection

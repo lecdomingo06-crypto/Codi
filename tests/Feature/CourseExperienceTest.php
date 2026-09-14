@@ -168,4 +168,115 @@ class CourseExperienceTest extends TestCase
             ->assertSee('C++ Input')
             ->assertDontSee('Flowchart');
     }
+
+    public function test_seeded_algorithms_in_motion_course_has_video_modules_and_suggested_problems(): void
+    {
+        $this->seed();
+
+        $student = User::where('role', 'USER')->firstOrFail();
+        $course = Course::where('slug', 'algorithms-in-motion')->firstOrFail();
+        $nextLesson = Lesson::where('slug', 'aim-big-o-and-trade-offs')->firstOrFail();
+        $practiceLesson = Lesson::where('slug', 'aim-arrays-strings-and-hash-maps')->firstOrFail();
+        $videoUrls = $course->lessons()->pluck('video_url')->filter();
+
+        $this->assertSame(8, $videoUrls->count());
+        $this->assertSame(8, $videoUrls->unique()->count());
+
+        $this->actingAs($student)
+            ->get(route('courses.index'))
+            ->assertOk()
+            ->assertSee('Algorithms in Motion')
+            ->assertSee('5 hours')
+            ->assertSee('Medium')
+            ->assertSee('0 / 8 lessons complete');
+
+        $this->actingAs($student)
+            ->get(route('courses.show', $course))
+            ->assertOk()
+            ->assertSee('Lesson 1 of 8')
+            ->assertSee('Learn Data Structures and Algorithms Visually')
+            ->assertSee('Visual Foundations')
+            ->assertSee('Core Structures')
+            ->assertSee('Patterns and Traversal')
+            ->assertSee('https://www.youtube.com/embed/RpLnQnurpLY', false)
+            ->assertSee(route('lessons.show', $nextLesson), false);
+
+        $this->actingAs($student)
+            ->get(route('lessons.show', $practiceLesson))
+            ->assertOk()
+            ->assertSee('Arrays, Strings, and Hash Maps')
+            ->assertSee('https://www.youtube.com/embed/RBSGKlAvoiM', false)
+            ->assertSee('Count Items')
+            ->assertSee('Contains Duplicate');
+    }
+
+    public function test_seeded_patterns_for_problem_solvers_course_has_videos_modules_and_suggested_problems(): void
+    {
+        $this->seed();
+
+        $student = User::where('role', 'USER')->firstOrFail();
+        $course = Course::where('slug', 'patterns-for-problem-solvers')->firstOrFail();
+        $twoPointersLesson = Lesson::where('slug', 'pps-two-pointers')->firstOrFail();
+        $videoUrls = $course->lessons()->pluck('video_url')->filter();
+
+        $this->assertSame(8, $videoUrls->count());
+        $this->assertSame(8, $videoUrls->unique()->count());
+
+        $this->actingAs($student)
+            ->get(route('courses.index'))
+            ->assertOk()
+            ->assertSee('Patterns for Problem Solvers')
+            ->assertSee('4 hours')
+            ->assertSee('0 / 8 lessons complete');
+
+        $this->actingAs($student)
+            ->get(route('courses.show', $course))
+            ->assertOk()
+            ->assertSee('Lesson 1 of 8')
+            ->assertSee('Data Structure and Algorithm Patterns')
+            ->assertSee('Pattern Map')
+            ->assertSee('Linear Patterns')
+            ->assertSee('Search and Branching')
+            ->assertSee('https://www.youtube.com/embed/Z_c4byLrNBU', false);
+
+        $this->actingAs($student)
+            ->get(route('lessons.show', $twoPointersLesson))
+            ->assertOk()
+            ->assertSee('Two Pointers')
+            ->assertSee('https://www.youtube.com/embed/cQ1Oz4ckceM', false)
+            ->assertSee('Reverse String')
+            ->assertSee('Palindrome String');
+    }
+
+    public function test_standalone_lesson_can_be_viewed_and_completed(): void
+    {
+        $student = User::factory()->create(['role' => 'USER']);
+        $lesson = Lesson::create([
+            'course_id' => null,
+            'title' => 'Standalone Variables',
+            'slug' => 'standalone-variables',
+            'summary' => 'Practice variables without a course.',
+            'body_markdown' => 'Variables store values.',
+            'sort_order' => 1,
+            'publication_status' => 'PUBLISHED',
+            'published_at' => now(),
+        ]);
+
+        $this->actingAs($student)
+            ->get(route('lessons.show', $lesson))
+            ->assertOk()
+            ->assertSee('Standalone Lesson')
+            ->assertSee('Standalone Variables')
+            ->assertSee('Lesson 1 of 1');
+
+        $this->actingAs($student)
+            ->post(route('lessons.complete', $lesson))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('lesson_progress', [
+            'user_id' => $student->id,
+            'lesson_id' => $lesson->id,
+            'status' => 'COMPLETED',
+        ]);
+    }
 }

@@ -10,7 +10,8 @@
                 @method('PATCH')
             @endif
             <label>Course
-                <select name="course_id" required>
+                <select name="course_id">
+                    <option value="">Standalone lesson</option>
                     @foreach($courses as $course)
                         <option value="{{ $course->id }}" @selected((string) old('course_id', $lesson->course_id) === (string) $course->id)>{{ $course->title }}</option>
                     @endforeach

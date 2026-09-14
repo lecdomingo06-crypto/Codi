@@ -12,11 +12,18 @@ use Illuminate\Support\Facades\DB;
 
 class StreakService
 {
-    public function recordSubmissionAnswer(User $user, Submission $submission, bool $accepted, ?CarbonImmutable $occurredAt = null): void
+    /**
+     * @return array{recorded:bool, first_accepted_today:bool, current_streak:int, longest_streak:int, activity_date:string}
+     */
+    public function recordSubmissionAnswer(User $user, Submission $submission, bool $accepted, ?CarbonImmutable $occurredAt = null): array
     {
         $occurredAt = $occurredAt ?? CarbonImmutable::now('UTC');
 
-        DB::transaction(function () use ($user, $submission, $accepted, $occurredAt): void {
+        return DB::transaction(function () use ($user, $submission, $accepted, $occurredAt): array {
+            $localDate = $occurredAt
+                ->setTimezone($user->timezone ?: 'UTC')
+                ->toDateString();
+
             $event = LearningEvent::firstOrCreate(
                 [
                     'user_id' => $user->id,
@@ -33,18 +40,23 @@ class StreakService
             );
 
             if (! $event->wasRecentlyCreated) {
-                return;
-            }
+                $streak = UserStreak::query()->firstOrCreate(['user_id' => $user->id]);
 
-            $localDate = $occurredAt
-                ->setTimezone($user->timezone ?: 'UTC')
-                ->toDateString();
+                return [
+                    'recorded' => false,
+                    'first_accepted_today' => false,
+                    'current_streak' => $streak->current_streak,
+                    'longest_streak' => $streak->longest_streak,
+                    'activity_date' => $localDate,
+                ];
+            }
 
             $activity = DailyExerciseActivity::query()
                 ->where('user_id', $user->id)
                 ->where('activity_date', $localDate)
                 ->lockForUpdate()
                 ->first();
+            $firstAcceptedToday = $accepted && (! $activity || $activity->accepted_answer_count === 0);
 
             if ($activity) {
                 $activity->increment('answer_count');
@@ -85,6 +97,14 @@ class StreakService
                     'last_qualifying_activity_date' => $localDate,
                 ])->save();
             }
+
+            return [
+                'recorded' => true,
+                'first_accepted_today' => $firstAcceptedToday,
+                'current_streak' => $streak->current_streak,
+                'longest_streak' => $streak->longest_streak,
+                'activity_date' => $localDate,
+            ];
         });
     }
 }

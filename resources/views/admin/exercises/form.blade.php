@@ -20,22 +20,6 @@
             @if($exercise->exists)
                 @method('PATCH')
             @endif
-            <label>Course
-                <select name="course_id">
-                    <option value="">None</option>
-                    @foreach($courses as $course)
-                        <option value="{{ $course->id }}" @selected((string) old('course_id', $exercise->course_id) === (string) $course->id)>{{ $course->title }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label>Lesson
-                <select name="lesson_id">
-                    <option value="">None</option>
-                    @foreach($lessons as $lesson)
-                        <option value="{{ $lesson->id }}" @selected((string) old('lesson_id', $exercise->lesson_id) === (string) $lesson->id)>{{ $lesson->title }}</option>
-                    @endforeach
-                </select>
-            </label>
             <label>Title <input name="title" value="{{ old('title', $latest->title ?? $exercise->title) }}" required></label>
             <label>Slug <input name="slug" value="{{ old('slug', $exercise->slug) }}"></label>
             <label>Summary <input name="summary" value="{{ old('summary', $latest->summary ?? $exercise->summary) }}" required></label>

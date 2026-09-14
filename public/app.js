@@ -14,6 +14,23 @@
         document.querySelector('[data-theme-toggle]')?.setAttribute('aria-label', `Switch to ${nextTheme === 'light' ? 'dark' : 'light'} theme`);
     });
 
+    const countdowns = [...document.querySelectorAll('[data-calendar-countdown][data-reset-at]')];
+    if (countdowns.length) {
+        const updateCountdowns = () => {
+            countdowns.forEach((countdown) => {
+                const resetAt = new Date(countdown.dataset.resetAt);
+                const secondsLeft = Math.max(0, Math.floor((resetAt.getTime() - Date.now()) / 1000));
+                const hours = String(Math.floor(secondsLeft / 3600)).padStart(2, '0');
+                const minutes = String(Math.floor((secondsLeft % 3600) / 60)).padStart(2, '0');
+                const seconds = String(secondsLeft % 60).padStart(2, '0');
+                countdown.textContent = `${hours}:${minutes}:${seconds} left`;
+            });
+        };
+
+        updateCountdowns();
+        window.setInterval(updateCountdowns, 1000);
+    }
+
     const navToggle = document.querySelector('[data-nav-toggle]');
     const primaryNav = document.querySelector('#primary-nav');
     navToggle?.addEventListener('click', () => {
@@ -147,36 +164,102 @@
         const rows = [...browser.querySelectorAll('[data-problem-row]')];
         const count = browser.querySelector('[data-problem-count]');
         const empty = browser.querySelector('[data-no-problem-results]');
+        const randomButton = browser.querySelector('[data-random-problem]');
+        const randomTooltip = browser.querySelector('[data-random-tooltip]');
+        const aboutModal = browser.querySelector('[data-practice-about-modal]');
+        const aboutOpen = browser.querySelector('[data-practice-about-open]');
+        let aboutTrigger = null;
+        let randomRow = null;
         let activeTopic = topicButtons.find((button) => button.classList.contains('active'))?.dataset.topicFilter || '';
-        const filterRows = () => {
+        const rowMatchesCurrentFilters = (row) => {
             const query = search?.value.trim().toLowerCase() || '';
             const selectedDifficulty = difficulty?.value || '';
+            const matchesSearch = !query || row.dataset.title.includes(query);
+            const matchesDifficulty = !selectedDifficulty || row.dataset.difficulty === selectedDifficulty;
+            const matchesTopic = !activeTopic || row.dataset.topic.includes(activeTopic);
+
+            return matchesSearch && matchesDifficulty && matchesTopic;
+        };
+        const setRandomState = () => {
+            randomButton?.classList.toggle('is-active', Boolean(randomRow));
+            randomButton?.setAttribute('aria-pressed', String(Boolean(randomRow)));
+            if (randomTooltip) randomTooltip.textContent = randomRow ? 'Choose another problem' : 'Choose random problem';
+        };
+        const filterRows = () => {
+            const matchingRows = rows.filter(rowMatchesCurrentFilters);
+
+            if (randomRow && !matchingRows.includes(randomRow)) {
+                randomRow = null;
+            }
+
             let visible = 0;
             rows.forEach((row) => {
-                const matchesSearch = !query || row.dataset.title.includes(query);
-                const matchesDifficulty = !selectedDifficulty || row.dataset.difficulty === selectedDifficulty;
-                const matchesTopic = !activeTopic || row.dataset.topic.includes(activeTopic);
-                const show = matchesSearch && matchesDifficulty && matchesTopic;
+                const show = rowMatchesCurrentFilters(row) && (!randomRow || row === randomRow);
                 row.hidden = !show;
+                row.classList.toggle('is-random-selection', show && row === randomRow);
                 if (show) visible += 1;
             });
             if (count) count.textContent = `${visible} problem${visible === 1 ? '' : 's'}`;
             if (empty) empty.hidden = visible !== 0;
+            setRandomState();
         };
-        search?.addEventListener('input', filterRows);
-        difficulty?.addEventListener('change', filterRows);
+        search?.addEventListener('input', () => {
+            randomRow = null;
+            filterRows();
+        });
+        difficulty?.addEventListener('change', () => {
+            randomRow = null;
+            filterRows();
+        });
         browser.querySelector('[data-clear-problem-search]')?.addEventListener('click', () => {
             if (search) search.value = '';
             if (difficulty) difficulty.value = '';
+            randomRow = null;
             filterRows();
             search?.focus();
         });
         topicButtons.forEach((button) => {
             button.addEventListener('click', () => {
                 activeTopic = button.dataset.topicFilter || '';
+                randomRow = null;
                 topicButtons.forEach((item) => item.classList.toggle('active', item.dataset.topicFilter === activeTopic));
                 filterRows();
             });
+        });
+        randomButton?.addEventListener('click', () => {
+            const matchingRows = rows.filter(rowMatchesCurrentFilters);
+            const pool = matchingRows.length > 1 && randomRow
+                ? matchingRows.filter((row) => row !== randomRow)
+                : matchingRows;
+
+            randomRow = pool[Math.floor(Math.random() * pool.length)] || null;
+            filterRows();
+
+            randomRow?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        const openAbout = () => {
+            if (!aboutModal) return;
+            aboutTrigger = document.activeElement;
+            aboutModal.hidden = false;
+            document.body.classList.add('has-modal-open');
+            aboutModal.querySelector('[data-practice-about-close]')?.focus();
+        };
+        const closeAbout = () => {
+            if (!aboutModal) return;
+            aboutModal.hidden = true;
+            document.body.classList.remove('has-modal-open');
+            aboutTrigger?.focus?.();
+            aboutTrigger = null;
+        };
+
+        aboutOpen?.addEventListener('click', openAbout);
+        aboutModal?.querySelectorAll('[data-practice-about-close]').forEach((button) => {
+            button.addEventListener('click', closeAbout);
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && aboutModal && !aboutModal.hidden) {
+                closeAbout();
+            }
         });
         filterRows();
     }
@@ -240,6 +323,214 @@
         openCommunityModal();
     }
 
+    const communityCsrf = document.querySelector('meta[name="csrf-token"]')?.content;
+    const threadModals = [...document.querySelectorAll('[data-community-thread-modal]')];
+    const shareModals = [...document.querySelectorAll('[data-community-share-modal]')];
+    let communityThreadTrigger = null;
+    let communityShareTrigger = null;
+
+    const formatCompactNumber = (value) => {
+        const absolute = Math.abs(Number(value) || 0);
+
+        if (absolute >= 1000000) {
+            return `${Number((absolute / 1000000).toFixed(1)).toString()}M`;
+        }
+
+        if (absolute >= 1000) {
+            return `${Number((absolute / 1000).toFixed(1)).toString()}K`;
+        }
+
+        return String(absolute);
+    };
+    const formatScore = (score, style = 'plain') => {
+        const numericScore = Number(score) || 0;
+
+        if (style === 'compact') {
+            return `${numericScore < 0 ? '-' : ''}${formatCompactNumber(numericScore)}`;
+        }
+
+        return String(numericScore);
+    };
+    const updateCommunityVote = (postId, score, userVote) => {
+        document.querySelectorAll(`[data-community-vote-score="${postId}"]`).forEach((scoreElement) => {
+            scoreElement.textContent = formatScore(score, scoreElement.dataset.scoreStyle);
+        });
+
+        document.querySelectorAll(`[data-community-vote-form][data-post-id="${postId}"] [data-community-vote-button]`).forEach((button) => {
+            button.classList.toggle('active', Number(button.dataset.voteValue) === Number(userVote));
+        });
+    };
+
+    const hasOpenCommunityThread = () => threadModals.some((modal) => !modal.hidden);
+    const hasOpenCommunityShare = () => shareModals.some((modal) => !modal.hidden);
+    const updateCommunityModalLock = () => {
+        const hasOpenComposer = Boolean(communityModal && !communityModal.hidden);
+        document.body.classList.toggle('has-modal-open', hasOpenComposer || hasOpenCommunityThread() || hasOpenCommunityShare());
+    };
+    const copyToClipboard = async (text) => {
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch {
+                // Fall back to the older copy command below.
+            }
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.append(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        textarea.remove();
+
+        if (!copied) {
+            throw new Error('Copy failed');
+        }
+    };
+    const closeOpenCommunityShare = () => {
+        const openModal = shareModals.find((modal) => !modal.hidden);
+        if (!openModal) return;
+
+        openModal.hidden = true;
+        const status = openModal.querySelector('[data-community-share-status]');
+        if (status) status.textContent = '';
+        updateCommunityModalLock();
+        communityShareTrigger?.focus?.();
+        communityShareTrigger = null;
+    };
+    const closeOpenCommunityThread = () => {
+        const openModal = threadModals.find((modal) => !modal.hidden);
+        if (!openModal) return;
+
+        closeOpenCommunityShare();
+        openModal.hidden = true;
+        updateCommunityModalLock();
+        communityThreadTrigger?.focus?.();
+        communityThreadTrigger = null;
+    };
+    const openCommunityThread = (threadId, trigger = document.activeElement) => {
+        const modal = threadModals.find((item) => item.dataset.threadId === String(threadId));
+        if (!modal) return;
+
+        closeCommunityModal();
+        closeOpenCommunityShare();
+        threadModals.forEach((item) => {
+            item.hidden = item !== modal;
+        });
+        communityThreadTrigger = trigger;
+        document.body.classList.add('has-modal-open');
+        modal.querySelector('[data-community-thread-close]')?.focus();
+    };
+    const openCommunityShare = (shareId, trigger = document.activeElement) => {
+        const modal = shareModals.find((item) => item.dataset.shareId === String(shareId));
+        if (!modal) return;
+
+        closeCommunityModal();
+        shareModals.forEach((item) => {
+            item.hidden = item !== modal;
+        });
+        communityShareTrigger = trigger;
+        document.body.classList.add('has-modal-open');
+        modal.querySelector('[data-community-share-message]')?.focus();
+    };
+    const runShareAction = async (button) => {
+        const modal = button.closest('[data-community-share-modal]');
+        const status = modal?.querySelector('[data-community-share-status]');
+        const url = button.dataset.shareUrl || window.location.href;
+
+        if (status) status.textContent = 'Copying link...';
+
+        try {
+            await copyToClipboard(url);
+            if (status) status.textContent = 'Link copied.';
+        } catch (error) {
+            if (status) status.textContent = 'Could not copy. Try copying the browser link.';
+        }
+    };
+
+    document.querySelectorAll('[data-community-thread-open]').forEach((button) => {
+        button.addEventListener('click', () => {
+            openCommunityThread(button.dataset.communityThreadOpen, button);
+        });
+    });
+    document.querySelectorAll('[data-community-share-open]').forEach((button) => {
+        button.addEventListener('click', () => {
+            openCommunityShare(button.dataset.communityShareOpen, button);
+        });
+    });
+    threadModals.forEach((modal) => {
+        modal.querySelectorAll('[data-community-thread-close]').forEach((button) => {
+            button.addEventListener('click', closeOpenCommunityThread);
+        });
+        modal.querySelectorAll('[data-community-thread-comment-focus]').forEach((button) => {
+            button.addEventListener('click', () => {
+                closeOpenCommunityShare();
+                modal.querySelector('[data-community-thread-input]')?.focus();
+            });
+        });
+    });
+    shareModals.forEach((modal) => {
+        modal.querySelectorAll('[data-community-share-close]').forEach((button) => {
+            button.addEventListener('click', closeOpenCommunityShare);
+        });
+        modal.querySelectorAll('[data-community-share-copy]').forEach((button) => {
+            button.addEventListener('click', () => runShareAction(button));
+        });
+    });
+    document.querySelectorAll('[data-community-vote-form]').forEach((voteForm) => {
+        voteForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const postId = voteForm.dataset.postId;
+            const buttons = [...document.querySelectorAll(`[data-community-vote-form][data-post-id="${postId}"] button`)];
+            buttons.forEach((button) => {
+                button.disabled = true;
+            });
+
+            try {
+                const response = await fetch(voteForm.action, {
+                    method: voteForm.method || 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': communityCsrf || '',
+                    },
+                    body: new FormData(voteForm),
+                });
+
+                if (!response.ok) {
+                    throw new Error('Vote failed');
+                }
+
+                const payload = await response.json();
+                updateCommunityVote(payload.post_id, payload.score, payload.user_vote);
+            } catch {
+                HTMLFormElement.prototype.submit.call(voteForm);
+                return;
+            } finally {
+                buttons.forEach((button) => {
+                    button.disabled = false;
+                });
+            }
+        });
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+
+        if (hasOpenCommunityShare()) {
+            closeOpenCommunityShare();
+            return;
+        }
+
+        closeOpenCommunityThread();
+    });
+    if (window.CODDY_OPEN_COMMUNITY_THREAD) {
+        openCommunityThread(window.CODDY_OPEN_COMMUNITY_THREAD);
+    }
+
     const form = document.querySelector('[data-auto-check]');
     if (!form) return;
 
@@ -253,10 +544,18 @@
     const idempotencyKey = submitForm?.querySelector('input[name="idempotency_key"]');
     const runButton = document.querySelector('[data-run-button]');
     const submitButton = submitForm?.querySelector('button[type="submit"]');
+    const completionToast = document.querySelector('[data-completion-toast]');
+    const completionTitle = document.querySelector('[data-completion-title]');
+    const completionClose = document.querySelector('[data-completion-close]');
+    const dailyStreakModal = document.querySelector('[data-daily-streak-modal]');
+    const dailyStreakCurrent = document.querySelector('[data-daily-streak-current]');
+    const dailyStreakDayLabel = document.querySelector('[data-daily-streak-day-label]');
+    const dailyStreakBest = document.querySelector('[data-daily-streak-best]');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
     let timer = null;
     let checkController = null;
     let actionController = null;
+    let completionTimer = null;
     let activeLanguage = languageSelect?.value || '';
     let starterCodes = {};
 
@@ -272,6 +571,45 @@
     };
 
     const showResultPanel = () => document.querySelector('[data-result-tab="result-output"]')?.click();
+
+    const hideCompletionToast = () => {
+        if (!completionToast) return;
+        completionToast.hidden = true;
+        clearTimeout(completionTimer);
+    };
+
+    const showCompletionToast = () => {
+        if (!completionToast) return;
+
+        if (completionTitle && form.dataset.exerciseTitle) {
+            completionTitle.textContent = form.dataset.exerciseTitle;
+        }
+
+        completionToast.hidden = false;
+        clearTimeout(completionTimer);
+        completionTimer = setTimeout(hideCompletionToast, 6500);
+    };
+
+    const hideDailyStreakModal = () => {
+        if (!dailyStreakModal) return;
+        dailyStreakModal.hidden = true;
+        document.body.classList.remove('has-modal-open');
+    };
+
+    const showDailyStreakModal = (completion = {}) => {
+        if (!dailyStreakModal) return;
+
+        const current = Number(completion.current_streak || 1);
+        const best = Number(completion.longest_streak || current);
+
+        if (dailyStreakCurrent) dailyStreakCurrent.textContent = String(current);
+        if (dailyStreakDayLabel) dailyStreakDayLabel.textContent = current === 1 ? 'day' : 'days';
+        if (dailyStreakBest) dailyStreakBest.textContent = `${best} ${best === 1 ? 'day' : 'days'}`;
+
+        dailyStreakModal.hidden = false;
+        document.body.classList.add('has-modal-open');
+        dailyStreakModal.querySelector('[data-daily-streak-close]')?.focus();
+    };
 
     const renderTests = (payload) => {
         const verdict = payload.verdict || payload.status || 'UNKNOWN';
@@ -379,6 +717,14 @@
             const payload = await response.json();
             status.textContent = `Submit: ${payload.verdict}`;
             renderTests(payload);
+            if (payload.verdict === 'ACCEPTED') {
+                if (payload.completion?.type === 'daily_streak') {
+                    hideCompletionToast();
+                    showDailyStreakModal(payload.completion);
+                } else {
+                    showCompletionToast();
+                }
+            }
         } catch (error) {
             if (error.name !== 'AbortError') status.textContent = 'Submit could not complete.';
         } finally {
@@ -409,6 +755,15 @@
     runButton.addEventListener('click', runVisibleTests);
     form.addEventListener('submit', runVisibleTests);
     submitForm?.addEventListener('submit', submitSolution);
+    completionClose?.addEventListener('click', hideCompletionToast);
+    dailyStreakModal?.querySelectorAll('[data-daily-streak-close]').forEach((button) => {
+        button.addEventListener('click', hideDailyStreakModal);
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && dailyStreakModal && !dailyStreakModal.hidden) {
+            hideDailyStreakModal();
+        }
+    });
     syncSubmitFields();
     timer = setTimeout(runCheck, 500);
 

@@ -27,9 +27,11 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->n
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/community', [CommunityController::class, 'index'])->name('community.index');
+    Route::get('/community/users/{user}', [CommunityController::class, 'user'])->name('community.users.show');
     Route::post('/community', [CommunityController::class, 'store'])->name('community.store');
     Route::post('/community/{post}/comments', [CommunityController::class, 'comment'])->name('community.comments.store');
     Route::post('/community/{post}/vote', [CommunityController::class, 'vote'])->name('community.vote');
+    Route::post('/community/{post}/share', [CommunityController::class, 'share'])->name('community.share');
     Route::delete('/community/{post}', [CommunityController::class, 'destroy'])->name('community.destroy');
     Route::redirect('/dashboard', '/community')->name('dashboard');
     Route::get('/courses', [CatalogController::class, 'courses'])->name('courses.index');
@@ -44,8 +46,10 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/exercises/{exercise:slug}/submit', [ExerciseWorkspaceController::class, 'submit'])->name('exercises.submit');
     Route::get('/submissions/{submission}', [ExerciseWorkspaceController::class, 'submission'])->name('submissions.show');
     Route::get('/progress', [ProgressController::class, 'show'])->name('progress.show');
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::patch('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
 
     Route::prefix('/api/v1')->group(function (): void {
         Route::get('/me/streak', [ProgressController::class, 'streak']);

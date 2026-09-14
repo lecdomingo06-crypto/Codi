@@ -91,6 +91,7 @@
                     class="editor-form"
                     data-auto-check
                     data-check-url="{{ route('exercises.check', $exercise) }}"
+                    data-exercise-title="{{ $version->title }}"
                 >
                     @csrf
                     <label class="sr-only">Code</label>
@@ -132,6 +133,43 @@
                         <button type="submit">Submit solution</button>
                     </form>
                 </div>
+            </section>
+        </div>
+
+        <aside class="completion-toast" data-completion-toast hidden role="status" aria-live="polite">
+            <div class="completion-toast__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+            </div>
+            <div>
+                <strong>Problem completed</strong>
+                <p><span data-completion-title>{{ $version->title }}</span> was accepted.</p>
+                <a href="{{ route('progress.show') }}">View progress</a>
+            </div>
+            <button type="button" class="icon-button" data-completion-close aria-label="Close completion notification">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+        </aside>
+
+        <div class="daily-streak-modal" data-daily-streak-modal hidden role="dialog" aria-modal="true" aria-labelledby="daily-streak-title">
+            <div class="daily-streak-modal__backdrop" data-daily-streak-close></div>
+            <section class="daily-streak-card" role="document">
+                <button type="button" class="icon-button" data-daily-streak-close aria-label="Close daily streak notification">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+                <div class="daily-streak-flame" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 22c4 0 7-2.7 7-6.8 0-2.7-1.6-5.1-3.4-6.9-.3 2.1-1.4 3.5-2.8 4.2.5-3.6-.9-6.7-3.4-9.5-.2 3.1-1.9 5.2-3.1 6.7C5.4 11 5 12.6 5 15.2 5 19.3 8 22 12 22Z"/></svg>
+                </div>
+                <h2 id="daily-streak-title">Daily Streak!</h2>
+                <div class="daily-streak-count">
+                    <strong data-daily-streak-current>1</strong>
+                    <span data-daily-streak-day-label>day</span>
+                </div>
+                <p>Great start! Keep the momentum going.</p>
+                <div class="daily-streak-best">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Zm10 2h3v2a3 3 0 0 1-3 3M7 6H4v2a3 3 0 0 0 3 3"/></svg>
+                    <span>Best: <strong data-daily-streak-best>1 day</strong></span>
+                </div>
+                <button type="button" class="button daily-streak-continue" data-daily-streak-close>Continue</button>
             </section>
         </div>
     </section>

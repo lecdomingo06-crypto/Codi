@@ -9,7 +9,7 @@
             <article class="panel stack">
                 <h2>{{ $lesson->title }}</h2>
                 <p><span class="badge">{{ ucfirst(strtolower($lesson->publication_status)) }}</span></p>
-                <p>{{ $lesson->course?->title }}</p>
+                <p>{{ $lesson->course?->title ?? 'Standalone lesson' }}</p>
                 <p><a href="{{ route('admin.lessons.edit', $lesson) }}">Edit</a></p>
             </article>
             @endforeach

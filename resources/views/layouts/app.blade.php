@@ -28,8 +28,13 @@
             @auth
                 @php
                     $searchesCourses = request()->routeIs('courses.*', 'lessons.*');
-                    $searchAction = $searchesCourses ? route('courses.index') : route('catalog.index');
-                    $searchLabel = $searchesCourses ? 'Search courses or lessons' : 'Search problems';
+                    $searchesCommunity = request()->routeIs('community.*');
+                    $searchAction = $searchesCommunity
+                        ? route('community.index')
+                        : ($searchesCourses ? route('courses.index') : route('catalog.index'));
+                    $searchLabel = $searchesCommunity
+                        ? 'Search posts'
+                        : ($searchesCourses ? 'Search courses or lessons' : 'Search problems');
                 @endphp
                 <a class="{{ request()->routeIs('community.*') ? 'is-active' : '' }}" href="{{ route('community.index') }}">Community</a>
                 <a class="{{ request()->routeIs('courses.*', 'lessons.*') ? 'is-active' : '' }}" href="{{ route('courses.index') }}">Courses</a>
@@ -39,6 +44,12 @@
                     <a class="{{ request()->routeIs('admin.*') ? 'is-active' : '' }}" href="{{ route('admin.dashboard') }}">Admin</a>
                 @endif
                 <form class="nav-search" method="GET" action="{{ $searchAction }}" role="search">
+                    @if($searchesCommunity)
+                        <input type="hidden" name="filter" value="{{ request('filter', 'HOT') }}">
+                        @if(request('tag'))
+                            <input type="hidden" name="tag" value="{{ request('tag') }}">
+                        @endif
+                    @endif
                     <label class="sr-only" for="nav-search">{{ $searchLabel }}</label>
                     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg>
                     <input id="nav-search" name="search" type="search" value="{{ request('search') }}" placeholder="{{ $searchLabel }}">
@@ -64,7 +75,7 @@
                             <strong>{{ auth()->user()->name }}</strong>
                             <span>{{ auth()->user()->email }}</span>
                         </div>
-                        <a href="{{ route('profile.edit') }}">Profile &amp; settings</a>
+                        <a href="{{ route('profile.show') }}">Profile &amp; settings</a>
                         <a href="{{ route('progress.show') }}">My progress</a>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf

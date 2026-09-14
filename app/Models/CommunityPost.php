@@ -25,6 +25,16 @@ class CommunityPost extends Model
         return $this->hasMany(CommunityVote::class);
     }
 
+    public function sharedPost()
+    {
+        return $this->belongsTo(self::class, 'shared_post_id');
+    }
+
+    public function shares()
+    {
+        return $this->hasMany(self::class, 'shared_post_id');
+    }
+
     public function imageUrl(): ?string
     {
         return $this->image_path ? asset('storage/'.$this->image_path) : null;

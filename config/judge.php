@@ -10,5 +10,6 @@ return [
     'php_binary' => env('JUDGE_PHP_BINARY', PHP_BINARY ?: 'php'),
     'cpp_binary' => env('JUDGE_CPP_BINARY', PHP_OS_FAMILY === 'Windows' && file_exists($windowsGpp) ? $windowsGpp : 'g++'),
     'timeout_seconds' => (float) env('JUDGE_TIMEOUT_SECONDS', 5.0),
+    'compile_timeout_seconds' => (float) env('JUDGE_COMPILE_TIMEOUT_SECONDS', 15.0),
     'max_output_bytes' => (int) env('JUDGE_MAX_OUTPUT_BYTES', 100000),
 ];

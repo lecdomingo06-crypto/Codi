@@ -159,14 +159,24 @@ class ExerciseWorkspaceController extends Controller
 
         $this->storeTestResults(null, $submission, $result['tests']);
         $accepted = $result['verdict'] === 'ACCEPTED';
-        $streaks->recordSubmissionAnswer($request->user(), $submission, $accepted);
+        $streakSummary = $streaks->recordSubmissionAnswer($request->user(), $submission, $accepted);
 
         if ($accepted && ! $alreadyAccepted) {
             $request->user()->increment('points', $version->points);
         }
 
         if ($request->wantsJson()) {
-            return response()->json($submission->load('testResults'), 201);
+            $payload = $submission->load('testResults')->toArray();
+            $payload['completion'] = [
+                'type' => $accepted
+                    ? ($streakSummary['first_accepted_today'] ? 'daily_streak' : 'problem_completed')
+                    : null,
+                'current_streak' => $streakSummary['current_streak'],
+                'longest_streak' => $streakSummary['longest_streak'],
+                'activity_date' => $streakSummary['activity_date'],
+            ];
+
+            return response()->json($payload, 201);
         }
 
         return redirect()->route('submissions.show', $submission);

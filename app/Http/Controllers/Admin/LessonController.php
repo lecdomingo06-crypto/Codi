@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class LessonController extends Controller
@@ -67,11 +68,8 @@ class LessonController extends Controller
     private function validateLesson(Request $request, ?Lesson $lesson = null): array
     {
         $data = $request->validate([
-            'course_id' => ['required', 'exists:courses,id'],
-            'module_id' => [
-                'nullable',
-                Rule::exists('modules', 'id')->where(fn ($query) => $query->where('course_id', $request->input('course_id'))),
-            ],
+            'course_id' => ['nullable', 'exists:courses,id'],
+            'module_id' => ['nullable', 'exists:modules,id'],
             'title' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255', Rule::unique('lessons', 'slug')->ignore($lesson)],
             'summary' => ['required', 'string', 'max:255'],
@@ -84,6 +82,20 @@ class LessonController extends Controller
         ]);
 
         $data['slug'] = $data['slug'] ?: Str::slug($data['title']);
+        $data['course_id'] = $data['course_id'] ?? null;
+        $data['module_id'] = $data['module_id'] ?? null;
+
+        if ($data['module_id']) {
+            $module = Module::findOrFail($data['module_id']);
+
+            if ($data['course_id'] && (int) $data['course_id'] !== $module->course_id) {
+                throw ValidationException::withMessages([
+                    'module_id' => 'Choose a module from the selected course.',
+                ]);
+            }
+
+            $data['course_id'] = $module->course_id;
+        }
 
         return $data;
     }

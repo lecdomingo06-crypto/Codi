@@ -154,7 +154,7 @@ class JudgeService
                 '-o',
                 $binaryPath,
             ]);
-            $compile->setTimeout((float) config('judge.timeout_seconds'));
+            $compile->setTimeout((float) config('judge.compile_timeout_seconds'));
 
             try {
                 $compile->run();

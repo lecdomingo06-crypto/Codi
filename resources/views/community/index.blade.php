@@ -6,6 +6,18 @@
         'tag' => $tag ?: null,
         'search' => $search ?: null,
     ], $params), fn ($value) => filled($value)));
+
+    $compactNumber = function (int $value): string {
+        if ($value >= 1000000) {
+            return rtrim(rtrim(number_format($value / 1000000, 1), '0'), '.').'M';
+        }
+
+        if ($value >= 1000) {
+            return rtrim(rtrim(number_format($value / 1000, 1), '0'), '.').'K';
+        }
+
+        return (string) $value;
+    };
 @endphp
 
 @section('content')
@@ -55,21 +67,6 @@
                         <span>Study Buddy</span>
                     </a>
                 </nav>
-            </section>
-
-            <section class="community-side-card community-search-card">
-                <h2>Search</h2>
-                <form class="community-search" method="GET" action="{{ route('community.index') }}">
-                    <input type="hidden" name="filter" value="{{ $filter }}">
-                    @if($tag)
-                        <input type="hidden" name="tag" value="{{ $tag }}">
-                    @endif
-                    <label>
-                        <span class="sr-only">Search community</span>
-                        <input name="search" value="{{ $search }}" placeholder="Search posts">
-                    </label>
-                    <button type="submit" class="button--secondary">Search</button>
-                </form>
             </section>
 
             <section class="community-side-card">
@@ -123,25 +120,42 @@
                         $score = (int) ($post->vote_score ?? 0);
                         $userVote = (int) ($userVotes[$post->id] ?? 0);
                         $canManagePost = $post->user_id === auth()->id() || auth()->user()->isAdmin();
+                        $commentCount = (int) $post->comments_count;
+                        $shareCount = (int) ($post->shares_count ?? 0);
+                        $postImageUrl = $post->imageUrl();
+                        $postThreadUrl = route('community.index', ['thread' => $post->id]).'#post-'.$post->id;
+                        $sharedPost = $post->sharedPost;
+                        $sharedPostImageUrl = $sharedPost?->imageUrl();
+                        $threadComments = $post->comments->sortByDesc('created_at');
+                        $deleteLabel = $post->shared_post_id ? 'Delete share' : 'Delete post';
                     @endphp
-                    <article class="community-post" id="post-{{ $post->id }}">
+                    <article class="community-post" id="post-{{ $post->id }}" data-community-post="{{ $post->id }}">
                         <div class="post-votes" aria-label="Post score">
-                            <form method="POST" action="{{ route('community.vote', $post) }}">
+                            <form method="POST" action="{{ route('community.vote', $post) }}" data-community-vote-form data-post-id="{{ $post->id }}">
                                 @csrf
                                 <input type="hidden" name="value" value="1">
-                                <button class="{{ $userVote === 1 ? 'active' : '' }}" type="submit" aria-label="Upvote {{ $post->title }}">^</button>
+                                <button class="{{ $userVote === 1 ? 'active' : '' }}" type="submit" aria-label="Upvote {{ $post->title }}" data-community-vote-button data-vote-value="1">^</button>
                             </form>
-                            <strong>{{ $score }}</strong>
-                            <form method="POST" action="{{ route('community.vote', $post) }}">
+                            <strong data-community-vote-score="{{ $post->id }}" data-score-style="plain">{{ $score }}</strong>
+                            <form method="POST" action="{{ route('community.vote', $post) }}" data-community-vote-form data-post-id="{{ $post->id }}">
                                 @csrf
                                 <input type="hidden" name="value" value="-1">
-                                <button class="{{ $userVote === -1 ? 'active' : '' }}" type="submit" aria-label="Downvote {{ $post->title }}">v</button>
+                                <button class="{{ $userVote === -1 ? 'active' : '' }}" type="submit" aria-label="Downvote {{ $post->title }}" data-community-vote-button data-vote-value="-1">v</button>
                             </form>
                         </div>
                         <div class="post-body">
                             <header class="post-meta">
+                                <a class="post-author-link" href="{{ route('community.users.show', $post->user) }}">
+                                    <span class="post-author-avatar" aria-hidden="true">
+                                        @if($post->user->avatarUrl())
+                                            <img src="{{ $post->user->avatarUrl() }}" alt="">
+                                        @else
+                                            {{ strtoupper(substr($post->user->name, 0, 1)) }}
+                                        @endif
+                                    </span>
+                                    <span>Posted by {{ $post->user->name }}</span>
+                                </a>
                                 <span class="post-tag">{{ str_replace('_', ' ', ucfirst(strtolower($post->tag))) }}</span>
-                                <span>Posted by {{ $post->user->name }}</span>
                                 <span>{{ $post->created_at->diffForHumans() }}</span>
                                 @if($canManagePost)
                                     <details class="post-menu">
@@ -150,7 +164,14 @@
                                             <form method="POST" action="{{ route('community.destroy', $post) }}">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit">Delete post</button>
+                                                <input type="hidden" name="filter" value="{{ $filter }}">
+                                                @if($tag)
+                                                    <input type="hidden" name="tag" value="{{ $tag }}">
+                                                @endif
+                                                @if($search)
+                                                    <input type="hidden" name="search" value="{{ $search }}">
+                                                @endif
+                                                <button type="submit">{{ $deleteLabel }}</button>
                                             </form>
                                         </div>
                                     </details>
@@ -158,34 +179,274 @@
                             </header>
                             <h2>{{ $post->title }}</h2>
                             <p>{{ $post->body }}</p>
-                            @if($post->imageUrl())
-                                <a class="post-image" href="{{ $post->imageUrl() }}" target="_blank" rel="noreferrer">
-                                    <img src="{{ $post->imageUrl() }}" alt="{{ $post->title }}">
+                            @if($postImageUrl)
+                                <button
+                                    class="post-image post-image-button"
+                                    type="button"
+                                    data-community-thread-open="{{ $post->id }}"
+                                    aria-controls="community-thread-{{ $post->id }}"
+                                    aria-label="Open {{ $post->title }} post view"
+                                >
+                                    <img src="{{ $postImageUrl }}" alt="{{ $post->title }}">
+                                </button>
+                            @endif
+                            @if($sharedPost)
+                                <a class="shared-post-preview" href="{{ route('community.index', ['thread' => $sharedPost->id]).'#post-'.$sharedPost->id }}">
+                                    @if($sharedPostImageUrl)
+                                        <img src="{{ $sharedPostImageUrl }}" alt="">
+                                    @endif
+                                    <span>Shared from {{ $sharedPost->user->name }}</span>
+                                    <strong>{{ $sharedPost->title }}</strong>
+                                    <p>{{ \Illuminate\Support\Str::limit($sharedPost->body, 150) }}</p>
                                 </a>
                             @endif
-                            <footer class="post-footer">
-                                <span>{{ $post->comments_count }} comments</span>
-                                <span>{{ $score >= 0 ? '+' : '' }}{{ $score }} score</span>
+                            <footer class="post-footer post-action-strip" aria-label="Post engagement">
+                                <button
+                                    class="post-action-button"
+                                    type="button"
+                                    data-community-thread-open="{{ $post->id }}"
+                                    aria-controls="community-thread-{{ $post->id }}"
+                                    aria-label="View {{ $commentCount }} {{ $commentCount === 1 ? 'comment' : 'comments' }}"
+                                >
+                                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 2 1.5-4A8 8 0 1 1 21 12Z"/></svg>
+                                    <span>{{ $compactNumber($commentCount) }}</span>
+                                </button>
+                                <button
+                                    class="post-action-button"
+                                    type="button"
+                                    data-community-share-open="{{ $post->id }}"
+                                    aria-controls="community-share-{{ $post->id }}"
+                                    aria-label="Share {{ $post->title }}"
+                                >
+                                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 15V4m0 0 4 4m-4-4-4 4"/></svg>
+                                    <span>{{ $shareCount > 0 ? $compactNumber($shareCount) : 'Share' }}</span>
+                                </button>
                             </footer>
-
-                            <section class="post-comments" aria-label="Comments for {{ $post->title }}">
-                                @foreach($post->comments->take(3) as $comment)
-                                    <article class="post-comment">
-                                        <strong>{{ $comment->user->name }}</strong>
-                                        <p>{{ $comment->body }}</p>
-                                    </article>
-                                @endforeach
-                                <form method="POST" action="{{ route('community.comments.store', $post) }}" class="comment-form">
-                                    @csrf
-                                    <label>
-                                        <span class="sr-only">Comment</span>
-                                        <input name="body" maxlength="2000" placeholder="Add a comment" required>
-                                    </label>
-                                    <button type="submit">Reply</button>
-                                </form>
-                            </section>
                         </div>
                     </article>
+
+                    <div
+                        class="community-thread-modal"
+                        id="community-thread-{{ $post->id }}"
+                        data-community-thread-modal
+                        data-thread-id="{{ $post->id }}"
+                        hidden
+                    >
+                        <div class="community-thread-backdrop" data-community-thread-close></div>
+                        <section class="community-thread-card" role="dialog" aria-modal="true" aria-labelledby="community-thread-title-{{ $post->id }}">
+                            <header class="community-thread-header">
+                                <h2 id="community-thread-title-{{ $post->id }}">{{ $post->user->name }}'s Post</h2>
+                                <button class="community-thread-close" type="button" data-community-thread-close aria-label="Close comments">x</button>
+                            </header>
+
+                            <div class="community-thread-scroll">
+                                <article class="thread-post">
+                                    <header class="thread-author">
+                                        <a class="thread-avatar" href="{{ route('community.users.show', $post->user) }}" aria-label="View {{ $post->user->name }} profile">
+                                            @if($post->user->avatarUrl())
+                                                <img src="{{ $post->user->avatarUrl() }}" alt="">
+                                            @else
+                                                {{ strtoupper(substr($post->user->name, 0, 1)) }}
+                                            @endif
+                                        </a>
+                                        <div>
+                                            <a class="thread-author-name" href="{{ route('community.users.show', $post->user) }}"><strong>{{ $post->user->name }}</strong></a>
+                                            <span>{{ $post->created_at->diffForHumans() }} &middot; {{ str_replace('_', ' ', ucfirst(strtolower($post->tag))) }}</span>
+                                        </div>
+
+                                        @if($canManagePost)
+                                            <details class="post-menu thread-menu">
+                                                <summary aria-label="Open post actions">...</summary>
+                                                <div>
+                                                    <form method="POST" action="{{ route('community.destroy', $post) }}">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <input type="hidden" name="filter" value="{{ $filter }}">
+                                                        @if($tag)
+                                                            <input type="hidden" name="tag" value="{{ $tag }}">
+                                                        @endif
+                                                        @if($search)
+                                                            <input type="hidden" name="search" value="{{ $search }}">
+                                                        @endif
+                                                        <button type="submit">{{ $deleteLabel }}</button>
+                                                    </form>
+                                                </div>
+                                            </details>
+                                        @endif
+                                    </header>
+
+                                    <h3>{{ $post->title }}</h3>
+                                    <p>{{ $post->body }}</p>
+
+                                    @if($postImageUrl)
+                                        <a class="thread-image" href="{{ $postImageUrl }}" target="_blank" rel="noreferrer">
+                                            <img src="{{ $postImageUrl }}" alt="{{ $post->title }}">
+                                        </a>
+                                    @endif
+                                    @if($sharedPost)
+                                        <a class="shared-post-preview shared-post-preview--thread" href="{{ route('community.index', ['thread' => $sharedPost->id]).'#post-'.$sharedPost->id }}">
+                                            @if($sharedPostImageUrl)
+                                                <img src="{{ $sharedPostImageUrl }}" alt="">
+                                            @endif
+                                            <span>Shared from {{ $sharedPost->user->name }}</span>
+                                            <strong>{{ $sharedPost->title }}</strong>
+                                            <p>{{ \Illuminate\Support\Str::limit($sharedPost->body, 150) }}</p>
+                                        </a>
+                                    @endif
+                                </article>
+
+                                <section class="thread-engagement" aria-label="Post engagement">
+                                    <div class="thread-reactions">
+                                        <span aria-hidden="true">^</span>
+                                        <strong data-community-vote-score="{{ $post->id }}" data-score-style="compact">{{ $score < 0 ? '-' : '' }}{{ $compactNumber(abs($score)) }}</strong>
+                                    </div>
+                                    <button type="button" data-community-thread-comment-focus>
+                                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 2 1.5-4A8 8 0 1 1 21 12Z"/></svg>
+                                        <span>{{ $compactNumber($commentCount) }}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        data-community-share-open="{{ $post->id }}"
+                                        aria-controls="community-share-{{ $post->id }}"
+                                    >
+                                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 15V4m0 0 4 4m-4-4-4 4"/></svg>
+                                        <span>{{ $shareCount > 0 ? $compactNumber($shareCount) : 'Share' }}</span>
+                                    </button>
+                                </section>
+
+                                <section class="thread-comments" aria-label="Comments">
+                                    <header>
+                                        <button type="button">Most relevant</button>
+                                    </header>
+
+                                    @forelse($threadComments as $comment)
+                                        <article class="thread-comment">
+                                            <a class="thread-avatar thread-avatar--small" href="{{ route('community.users.show', $comment->user) }}" aria-label="View {{ $comment->user->name }} profile">
+                                                @if($comment->user->avatarUrl())
+                                                    <img src="{{ $comment->user->avatarUrl() }}" alt="">
+                                                @else
+                                                    {{ strtoupper(substr($comment->user->name, 0, 1)) }}
+                                                @endif
+                                            </a>
+                                            <div>
+                                                <div class="thread-comment-bubble">
+                                                    <a class="thread-comment-author" href="{{ route('community.users.show', $comment->user) }}">{{ $comment->user->name }}</a>
+                                                    <p>{{ $comment->body }}</p>
+                                                </div>
+                                                <footer>
+                                                    <span>{{ $comment->created_at->diffForHumans() }}</span>
+                                                    <button type="button" data-community-thread-comment-focus>Reply</button>
+                                                    <button
+                                                        type="button"
+                                                        data-community-share-open="{{ $post->id }}"
+                                                        aria-controls="community-share-{{ $post->id }}"
+                                                    >Share</button>
+                                                </footer>
+                                            </div>
+                                        </article>
+                                    @empty
+                                        <p class="thread-empty">No comments yet. Start the conversation.</p>
+                                    @endforelse
+                                </section>
+                            </div>
+
+                            <form method="POST" action="{{ route('community.comments.store', $post) }}" class="thread-reply-bar">
+                                @csrf
+                                <input type="hidden" name="filter" value="{{ $filter }}">
+                                @if($tag)
+                                    <input type="hidden" name="tag" value="{{ $tag }}">
+                                @endif
+                                @if($search)
+                                    <input type="hidden" name="search" value="{{ $search }}">
+                                @endif
+                                <span class="thread-avatar thread-avatar--small" aria-hidden="true">
+                                    @if(auth()->user()->avatarUrl())
+                                        <img src="{{ auth()->user()->avatarUrl() }}" alt="">
+                                    @else
+                                        {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                                    @endif
+                                </span>
+                                <label>
+                                    <span class="sr-only">Comment</span>
+                                    <input name="body" maxlength="2000" placeholder="Comment as {{ auth()->user()->name }}" data-community-thread-input required>
+                                </label>
+                                <button type="submit" aria-label="Post comment">
+                                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg>
+                                </button>
+                            </form>
+                        </section>
+                    </div>
+
+                    <div
+                        class="community-share-modal"
+                        id="community-share-{{ $post->id }}"
+                        data-community-share-modal
+                        data-share-id="{{ $post->id }}"
+                        hidden
+                    >
+                        <div class="community-share-backdrop" data-community-share-close></div>
+                        <section class="community-share-card" role="dialog" aria-modal="true" aria-labelledby="community-share-title-{{ $post->id }}">
+                            <header class="community-share-header">
+                                <h2 id="community-share-title-{{ $post->id }}">Share</h2>
+                                <button class="community-thread-close" type="button" data-community-share-close aria-label="Close share dialog">x</button>
+                            </header>
+
+                            <form method="POST" action="{{ route('community.share', $post) }}" class="share-composer">
+                                @csrf
+                                <div class="share-author">
+                                    <span class="thread-avatar thread-avatar--small" aria-hidden="true">
+                                        @if(auth()->user()->avatarUrl())
+                                            <img src="{{ auth()->user()->avatarUrl() }}" alt="">
+                                        @else
+                                            {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                                        @endif
+                                    </span>
+                                    <div>
+                                        <strong>{{ auth()->user()->name }}</strong>
+                                        <span>Community feed</span>
+                                    </div>
+                                </div>
+
+                                <label class="share-message">
+                                    <span class="sr-only">Share message</span>
+                                    <textarea name="body" rows="3" maxlength="500" placeholder="Say something about this..." data-community-share-message></textarea>
+                                </label>
+
+                                <article class="share-preview">
+                                    <span>{{ str_replace('_', ' ', ucfirst(strtolower($post->tag))) }}</span>
+                                    <strong>{{ $post->title }}</strong>
+                                    <p>{{ \Illuminate\Support\Str::limit($post->body, 120) }}</p>
+                                </article>
+
+                                <button
+                                    class="share-now-button"
+                                    type="submit"
+                                >
+                                    Share to Community
+                                </button>
+
+                                <section class="share-options" aria-label="Share destinations">
+                                    <h3>Share to</h3>
+                                    <div>
+                                        <button type="button" data-community-share-copy data-share-url="{{ $postThreadUrl }}">
+                                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1 0l-2 2A5 5 0 0 0 12 20.1l1.1-1.1"/></svg>
+                                            <span>Copy link</span>
+                                        </button>
+                                        <a href="mailto:?subject={{ rawurlencode($post->title) }}&body={{ rawurlencode($postThreadUrl) }}">
+                                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg>
+                                            <span>Email</span>
+                                        </a>
+                                        <a href="https://www.facebook.com/sharer/sharer.php?u={{ rawurlencode($postThreadUrl) }}" target="_blank" rel="noreferrer">
+                                            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M14 8h3V4h-3a5 5 0 0 0-5 5v3H6v4h3v4h4v-4h3l1-4h-4V9a1 1 0 0 1 1-1Z"/></svg>
+                                            <span>Facebook</span>
+                                        </a>
+                                    </div>
+                                </section>
+
+                                <p class="share-status" data-community-share-status aria-live="polite"></p>
+                            </form>
+                        </section>
+                    </div>
                 @empty
                     <section class="community-empty">
                         <h2>No community posts yet.</h2>
@@ -242,6 +503,12 @@
     @if($errors->has('title') || $errors->has('body') || $errors->has('tag') || $errors->has('image'))
         <script>
             window.CODDY_OPEN_COMMUNITY_COMPOSER = true;
+        </script>
+    @endif
+
+    @if(request('thread'))
+        <script>
+            window.CODDY_OPEN_COMMUNITY_THREAD = @json((string) request('thread'));
         </script>
     @endif
 @endsection
