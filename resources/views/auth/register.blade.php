@@ -4,7 +4,7 @@
     <section class="auth-shell">
         <div class="auth-card stack narrow">
             <a class="auth-brand" href="{{ route('home') }}"><span class="brand-mark" aria-hidden="true">&lt;/&gt;</span> Coddy</a>
-            <div><p class="eyebrow">Start your practice</p><h1>Create your account.</h1><p>Set up your workspace and start solving your first problem.</p></div>
+            <div><h1>Create your account.</h1><p>Set up your workspace and start solving your first problem.</p></div>
         <form method="POST" action="{{ route('register') }}" class="stack" data-register-form>
             @csrf
             <label>Name <input name="name" value="{{ old('name') }}" autocomplete="name" required autofocus></label>
