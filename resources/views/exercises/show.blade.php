@@ -74,13 +74,16 @@
             <section class="editor-panel">
                 <div class="editor-toolbar">
                     <strong>&lt;/&gt; Editor</strong>
-                    <label>Language
-                        <select name="language" form="run-form" data-editor-language aria-label="Programming language">
-                            @foreach($version->supported_languages as $language)
-                                <option value="{{ $language }}" @selected(old('language', $version->supported_languages[0] ?? 'python') === $language)>{{ $language }}</option>
-                            @endforeach
-                        </select>
-                    </label>
+                    <div class="editor-toolbar-actions">
+                        <label>Language
+                            <select name="language" form="run-form" data-editor-language aria-label="Programming language">
+                                @foreach($version->supported_languages as $language)
+                                    <option value="{{ $language }}" @selected(old('language', $version->supported_languages[0] ?? 'python') === $language)>{{ $language }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+                        <button type="button" class="button--secondary editor-run-button" data-run-button>Run code</button>
+                    </div>
                 </div>
 
                 <form
@@ -121,7 +124,6 @@
                 </div>
 
                 <div class="editor-actions">
-                    <button type="button" class="button--secondary" data-run-button>Run code</button>
                     <form method="POST" action="{{ route('exercises.submit', $exercise) }}" data-submit-from-editor>
                         @csrf
                         <input type="hidden" name="idempotency_key" value="{{ $idempotencyKey }}">

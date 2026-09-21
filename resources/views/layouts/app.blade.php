@@ -5,14 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ?? 'Coddy — Practice with purpose' }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     @else
         <link rel="stylesheet" href="{{ asset('app.css') }}?v={{ filemtime(public_path('app.css')) }}">
         <script defer src="{{ asset('app.js') }}?v={{ filemtime(public_path('app.js')) }}"></script>
     @endif
+    @stack('head')
 </head>
-<body data-theme="dark">
+<body data-theme="dark" class="@yield('body-class')">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="topbar">
         <a class="brand" href="{{ auth()->check() ? route('dashboard') : route('home') }}" aria-label="Coddy home">
@@ -62,6 +66,14 @@
                     </div>
                 </details>
             @else
+                <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme">
+                    <svg class="theme-icon-moon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20.7 15.1A8.5 8.5 0 0 1 8.9 3.3 8.5 8.5 0 1 0 20.7 15.1Z"/></svg>
+                    <svg class="theme-icon-sun" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+                </button>
+                @if(request()->routeIs('home'))
+                    <a href="#how-it-works">How it works</a>
+                    <a href="#demo-access">Try demo</a>
+                @endif
                 <a href="{{ route('login') }}">Sign in</a>
                 <a class="button button--small" href="{{ route('register') }}">Get started</a>
             @endauth

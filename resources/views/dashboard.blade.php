@@ -11,7 +11,7 @@
             <a class="button" href="{{ route('catalog.index') }}">Browse problems <span aria-hidden="true">→</span></a>
         </header>
         <section class="stats-section" aria-label="Practice overview">
-            <div class="section-heading"><h2>Practice overview</h2><span class="count-label">Your current account data</span></div>
+            <div class="section-heading"><h2>Practice overview</h2></div>
             <div class="stats-list">
                 <div><span>Current streak</span><strong>{{ $user->streak?->current_streak ?? 0 }} days</strong></div>
                 <div><span>Longest streak</span><strong>{{ $user->streak?->longest_streak ?? 0 }} days</strong></div>

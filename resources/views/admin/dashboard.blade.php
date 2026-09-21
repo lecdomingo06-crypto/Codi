@@ -20,7 +20,7 @@
             </div>
         </section>
         <section class="content-section stack">
-            <div class="section-heading"><div><p class="eyebrow">Live activity</p><h2>Recent submissions</h2></div></div>
+            <div class="section-heading"><div><p class="eyebrow">Activity</p><h2>Recent submissions</h2></div></div>
             @forelse($recentSubmissions as $submission)
                 <div class="submission-item"><span class="status-dot {{ $submission->verdict === 'ACCEPTED' ? 'status-dot--accepted' : 'status-dot--failed' }}"></span><span><strong>{{ $submission->exercise->title }}</strong><small>{{ $submission->created_at->format('M j, Y · H:i') }}</small></span><x-verdict-badge :verdict="$submission->verdict" /></div>
             @empty
